@@ -1,0 +1,9 @@
+# Perfil para infra/docker-compose.yml. Las claves del CUIL no tienen valor por defecto:
+# si CLIENTES_CUIL_CLAVE o CLIENTES_CUIL_HMAC no están definidas, el servicio no arranca.
+spring:
+  datasource:
+    url: ${CLIENTES_DB_URL:jdbc:postgresql://postgres:5432/clientes_db}
+    username: ${CLIENTES_DB_USUARIO}
+    password: ${CLIENTES_DB_CLAVE}
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}

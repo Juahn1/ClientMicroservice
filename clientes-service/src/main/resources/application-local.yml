@@ -1,0 +1,14 @@
+# Perfil para desarrollo en la máquina: PostgreSQL y Kafka de infra/docker-compose.yml publicados en localhost.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:${POSTGRES_PUERTO_HOST:5432}/clientes_db
+    username: ${CLIENTES_DB_USUARIO:clientes}
+    password: ${CLIENTES_DB_CLAVE:clientes}
+  kafka:
+    bootstrap-servers: localhost:${KAFKA_PUERTO_HOST:29092}
+
+clientes:
+  cuil:
+    # Claves FICTICIAS y fijas, solo para datos de prueba. Fijas para que cuil_hash no cambie entre arranques.
+    clave-cifrado: c29sby1sb2NhbC1jbGF2ZS1jaWZyYWRvLWN1aWwtMzI=
+    clave-hash: c29sby1sb2NhbC1jbGF2ZS1obWFjLWRlbC1jdWlsLTMy

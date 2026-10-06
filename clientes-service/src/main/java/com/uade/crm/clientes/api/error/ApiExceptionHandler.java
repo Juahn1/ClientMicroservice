@@ -1,0 +1,129 @@
+package com.uade.crm.clientes.api.error;
+
+import com.uade.crm.clientes.config.ClientesProperties;
+import com.uade.crm.clientes.config.CorrelationIdFilter;
+import com.uade.crm.clientes.domain.model.ClienteNoEncontradoException;
+import jakarta.servlet.http.HttpServletRequest;
+import java.net.URI;
+import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+import org.springframework.context.MessageSourceResolvable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatusCode;
+import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.lang.Nullable;
+import org.springframework.validation.FieldError;
+import org.springframework.validation.ObjectError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.NativeWebRequest;
+import org.springframework.web.context.request.WebRequest;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+
+/**
+ * Traduce todo error de la API a ProblemDetail (RFC 7807) con {@code codigo} y {@code correlationId}.
+ */
+@RestControllerAdvice
+public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
+
+    private final String tipoBase;
+
+    public ApiExceptionHandler(ClientesProperties properties) {
+        this.tipoBase = properties.errores().tipoBase();
+    }
+
+    @ExceptionHandler(ClienteNoEncontradoException.class)
+    ResponseEntity<Object> clienteNoEncontrado(ClienteNoEncontradoException ex, NativeWebRequest request) {
+        return problema(CodigoError.CLIENTE_NO_ENCONTRADO, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(Exception.class)
+    ResponseEntity<Object> errorInesperado(Exception ex, NativeWebRequest request) {
+        log.error("Error no controlado", ex);
+        return problema(CodigoError.ERROR_INTERNO, null, request);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        List<ErrorDeCampo> errores = ex.getBindingResult().getAllErrors().stream()
+                .map(ApiExceptionHandler::errorDeCampo)
+                .toList();
+        return validacion(errores, request);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHandlerMethodValidationException(HandlerMethodValidationException ex,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        List<ErrorDeCampo> errores = ex.getParameterValidationResults().stream()
+                .flatMap(resultado -> resultado.getResolvableErrors().stream()
+                        .map(error -> new ErrorDeCampo(
+                                resultado.getMethodParameter().getParameterName(), mensaje(error))))
+                .toList();
+        return validacion(errores, request);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+            HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        return problema(CodigoError.JSON_INVALIDO, "El cuerpo del request no es un JSON válido", request);
+    }
+
+    /** Errores que Spring MVC resuelve solo (405, 415, ruta inexistente...): se completan con codigo genérico. */
+    @Override
+    protected ResponseEntity<Object> handleExceptionInternal(Exception ex, @Nullable Object body,
+            HttpHeaders headers, HttpStatusCode statusCode, WebRequest request) {
+        ResponseEntity<Object> respuesta = super.handleExceptionInternal(ex, body, headers, statusCode, request);
+        if (respuesta != null && respuesta.getBody() instanceof ProblemDetail problema
+                && (problema.getProperties() == null || !problema.getProperties().containsKey("codigo"))) {
+            completar(problema, statusCode.is5xxServerError() ? CodigoError.ERROR_INTERNO : CodigoError.SOLICITUD_INVALIDA,
+                    request);
+        }
+        return respuesta;
+    }
+
+    private ResponseEntity<Object> validacion(List<ErrorDeCampo> errores, WebRequest request) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(CodigoError.VALIDACION.status(),
+                "Hay campos que no cumplen las validaciones");
+        completar(problema, CodigoError.VALIDACION, request);
+        problema.setProperty("errores", errores);
+        return ResponseEntity.status(CodigoError.VALIDACION.status()).body(problema);
+    }
+
+    private ResponseEntity<Object> problema(CodigoError codigo, @Nullable String detalle, WebRequest request) {
+        ProblemDetail problema = ProblemDetail.forStatusAndDetail(codigo.status(), detalle);
+        completar(problema, codigo, request);
+        return ResponseEntity.status(codigo.status()).body(problema);
+    }
+
+    private void completar(ProblemDetail problema, CodigoError codigo, WebRequest request) {
+        problema.setType(URI.create(tipoBase + codigo.slug()));
+        problema.setTitle(codigo.titulo());
+        problema.setProperty("codigo", codigo.name());
+        problema.setProperty("correlationId", MDC.get(CorrelationIdFilter.MDC_KEY));
+        if (request instanceof NativeWebRequest nativo
+                && nativo.getNativeRequest() instanceof HttpServletRequest servlet) {
+            problema.setInstance(URI.create(servlet.getRequestURI()));
+        }
+    }
+
+    private static ErrorDeCampo errorDeCampo(ObjectError error) {
+        String campo = error instanceof FieldError fieldError ? fieldError.getField() : error.getObjectName();
+        return new ErrorDeCampo(campo, mensaje(error));
+    }
+
+    private static String mensaje(MessageSourceResolvable error) {
+        return error.getDefaultMessage();
+    }
+
+    public record ErrorDeCampo(String campo, String mensaje) {
+    }
+}
