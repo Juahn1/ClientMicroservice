@@ -1,6 +1,8 @@
 package com.uade.crm.pruebas;
 
+import com.uade.crm.clientes.api.seguridad.RequiereClaveServicio;
 import com.uade.crm.clientes.domain.model.ClienteNoEncontradoException;
+import com.uade.crm.contracts.Provincia;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -37,12 +39,20 @@ public class PruebaController {
         return alta;
     }
 
+    /** Endpoint interno de prueba para {@link RequiereClaveServicio}. */
+    @RequiereClaveServicio
+    @PostMapping("/pruebas/interno")
+    AltaPrueba interno(@Valid @RequestBody AltaPrueba alta) {
+        log.info("Alta interna recibida");
+        return alta;
+    }
+
     @PostMapping("/clientes/falla")
     void falla(@RequestBody AltaPrueba alta) {
         throw new IllegalStateException("Fallo procesando CUIL " + alta.cuil() + " y teléfono " + alta.telefono());
     }
 
     public record AltaPrueba(@NotBlank @Size(min = 2, max = 120) String nombre, @Email String email, String cuil,
-            String telefono) {
+            String telefono, Provincia provincia) {
     }
 }

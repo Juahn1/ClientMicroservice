@@ -34,6 +34,8 @@ springdoc:
     path: /swagger-ui.html
 
 clientes:
+  seguridad:
+    clave-leads: ${CLIENTES_CLAVE_LEADS}   # mínimo 32 caracteres; ej. openssl rand -base64 32
   telefono:
     region-por-defecto: AR
   cuil:
@@ -50,6 +52,7 @@ clientes:
     tolerancia-precio: 0.10   # acepta unidades hasta 10% por encima del precio máximo (margen de negociación)
   paginacion:
     tamanio-maximo: 50
+    tamanio-por-defecto: 20
   kafka:
     topicos:
       cliente-actualizado: cliente-actualizado

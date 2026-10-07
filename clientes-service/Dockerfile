@@ -4,8 +4,10 @@
 FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /build
 COPY pom.xml .
+COPY contracts/pom.xml contracts/
 COPY clientes-service/pom.xml clientes-service/
 RUN mvn -B -q -pl clientes-service -am dependency:go-offline
+COPY contracts/src contracts/src
 COPY clientes-service/src clientes-service/src
 RUN mvn -B -q -pl clientes-service -am package -DskipTests
 

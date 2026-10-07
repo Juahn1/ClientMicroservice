@@ -17,6 +17,7 @@ import org.springframework.validation.annotation.Validated;
 @Validated
 @ConfigurationProperties(prefix = "clientes")
 public record ClientesProperties(
+        @Valid @NotNull Seguridad seguridad,
         @Valid @NotNull Telefono telefono,
         @Valid @NotNull Cuil cuil,
         @Valid @NotNull SituacionCrediticia situacionCrediticia,
@@ -24,6 +25,40 @@ public record ClientesProperties(
         @Valid @NotNull Paginacion paginacion,
         @Valid @NotNull Kafka kafka,
         @Valid @NotNull Errores errores) {
+
+    /**
+     * Clave que presenta {@code leads} en {@code X-Api-Key} para los endpoints internos de escritura (design D2).
+     * Se exige un largo mínimo para que un placeholder sin resolver ({@code ${CLIENTES_CLAVE_LEADS}}) no deje
+     * el endpoint protegido por una clave conocida.
+     */
+    public record Seguridad(@NotBlank String claveLeads) {
+
+        public static final int LARGO_MINIMO = 32;
+
+        public Seguridad {
+            exigirClave(claveLeads);
+        }
+
+        private static void exigirClave(String clave) {
+            if (clave == null || clave.isBlank()) {
+                return;
+            }
+            if (clave.startsWith("${")) {
+                throw new IllegalArgumentException(
+                        "clientes.seguridad.clave-leads no está resuelta (¿falta la variable de entorno CLIENTES_CLAVE_LEADS?)");
+            }
+            if (clave.length() < LARGO_MINIMO) {
+                throw new IllegalArgumentException("clientes.seguridad.clave-leads debe tener al menos "
+                        + LARGO_MINIMO + " caracteres y tiene " + clave.length()
+                        + " (¿falta la variable de entorno CLIENTES_CLAVE_LEADS?)");
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "Seguridad[claveLeads=****]";
+        }
+    }
 
     public record Telefono(@NotBlank String regionPorDefecto) {
     }
@@ -80,7 +115,14 @@ public record ClientesProperties(
     public record Interesados(@NotNull @DecimalMin("0") BigDecimal toleranciaPrecio) {
     }
 
-    public record Paginacion(@Positive int tamanioMaximo) {
+    public record Paginacion(@Positive int tamanioMaximo, @Positive int tamanioPorDefecto) {
+
+        public Paginacion {
+            if (tamanioPorDefecto > tamanioMaximo) {
+                throw new IllegalArgumentException("clientes.paginacion.tamanio-por-defecto (" + tamanioPorDefecto
+                        + ") no puede superar clientes.paginacion.tamanio-maximo (" + tamanioMaximo + ")");
+            }
+        }
     }
 
     public record Kafka(@Valid @NotNull Topicos topicos) {

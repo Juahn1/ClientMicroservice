@@ -8,6 +8,9 @@ spring:
     bootstrap-servers: localhost:${KAFKA_PUERTO_HOST:29092}
 
 clientes:
+  seguridad:
+    # Clave FICTICIA, solo para desarrollo local. En docker se toma de CLIENTES_CLAVE_LEADS.
+    clave-leads: ${CLIENTES_CLAVE_LEADS:solo-local-clave-de-servicio-leads-0001}
   cuil:
     # Claves FICTICIAS y fijas, solo para datos de prueba. Fijas para que cuil_hash no cambie entre arranques.
     clave-cifrado: c29sby1sb2NhbC1jbGF2ZS1jaWZyYWRvLWN1aWwtMzI=

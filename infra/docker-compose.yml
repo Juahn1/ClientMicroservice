@@ -59,6 +59,7 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       CLIENTES_CUIL_CLAVE: ${CLIENTES_CUIL_CLAVE:?Definí CLIENTES_CUIL_CLAVE en infra/.env}
       CLIENTES_CUIL_HMAC: ${CLIENTES_CUIL_HMAC:?Definí CLIENTES_CUIL_HMAC en infra/.env}
+      CLIENTES_CLAVE_LEADS: ${CLIENTES_CLAVE_LEADS:?Definí CLIENTES_CLAVE_LEADS en infra/.env}
     expose:
       - "8082"
     # Publicado al host mientras el gateway no esté integrado (design D8).

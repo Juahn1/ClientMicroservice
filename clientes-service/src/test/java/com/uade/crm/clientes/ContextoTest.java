@@ -49,6 +49,7 @@ class ContextoTest {
     @Test
     void cargaLaConfiguracionDeLaSeccion59() {
         assertThat(properties.paginacion().tamanioMaximo()).isEqualTo(50);
+        assertThat(properties.paginacion().tamanioPorDefecto()).isEqualTo(20);
         assertThat(properties.situacionCrediticia().modo())
                 .isEqualTo(ClientesProperties.ModoSituacionCrediticia.SIMULADO);
         assertThat(properties.situacionCrediticia().vigencia()).isEqualTo(Duration.ofDays(30));
@@ -61,7 +62,23 @@ class ContextoTest {
         try (Connection conexion = flyway.getConfiguration().getDataSource().getConnection()) {
             assertThat(conexion.getCatalog()).isEqualTo("clientes_db");
         }
-        assertThat(flyway.info().applied()).isEmpty();
+        assertThat(flyway.info().applied())
+                .extracting(migracion -> migracion.getScript())
+                .containsExactly("V1__cliente.sql");
+    }
+
+    @Test
+    void laMigracionCreaLaTablaClienteConSusIndices() throws Exception {
+        try (Connection conexion = flyway.getConfiguration().getDataSource().getConnection();
+                var consulta = conexion.createStatement().executeQuery(
+                        "SELECT indexname FROM pg_indexes WHERE tablename = 'cliente' ORDER BY indexname")) {
+            var indices = new java.util.ArrayList<String>();
+            while (consulta.next()) {
+                indices.add(consulta.getString(1));
+            }
+            assertThat(indices).contains("ux_cliente_email_activo", "ix_cliente_telefono_activo",
+                    "ix_cliente_provincia", "ix_cliente_ultimo_contacto");
+        }
     }
 
     @Test

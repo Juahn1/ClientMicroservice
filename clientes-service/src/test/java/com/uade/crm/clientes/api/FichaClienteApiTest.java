@@ -1,0 +1,108 @@
+package com.uade.crm.clientes.api;
+
+import static com.uade.crm.clientes.api.AltaClienteApiTest.CLAVE;
+import static com.uade.crm.clientes.api.AltaClienteApiTest.martina;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.uade.crm.clientes.PruebaIntegracion;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.web.servlet.MockMvc;
+
+/** Requirement: Consulta de la ficha del cliente (y "Consultas sin clave" de clientes-transversal). */
+@PruebaIntegracion
+class FichaClienteApiTest {
+
+    @Autowired
+    MockMvc mvc;
+
+    @Autowired
+    ObjectMapper json;
+
+    @Autowired
+    JdbcTemplate jdbc;
+
+    @BeforeEach
+    void limpiar() {
+        jdbc.update("DELETE FROM cliente");
+    }
+
+    @Test
+    void clienteExistenteSinClave() throws Exception {
+        UUID id = alta(martina("martina@gmail.com", "11 1234-5678", "INSTAGRAM"));
+
+        mvc.perform(get("/clientes/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", "W/\"0\""))
+                .andExpect(jsonPath("$.id").value(id.toString()))
+                .andExpect(jsonPath("$.nombre").value("Martina"))
+                .andExpect(jsonPath("$.apellido").value("López"))
+                .andExpect(jsonPath("$.email").value("martina@gmail.com"))
+                .andExpect(jsonPath("$.telefono").value("+5491112345678"))
+                .andExpect(jsonPath("$.telefonoAlternativo").value(nullValue()))
+                .andExpect(jsonPath("$.provincia").value("BUENOS_AIRES"))
+                .andExpect(jsonPath("$.localidad").value(nullValue()))
+                .andExpect(jsonPath("$.canalOrigen").value("INSTAGRAM"))
+                .andExpect(jsonPath("$.ultimoCanal").value("INSTAGRAM"))
+                .andExpect(jsonPath("$.contactosRegistrados").value(1))
+                .andExpect(jsonPath("$.ultimoContactoEn").isString())
+                .andExpect(jsonPath("$.requiereRevision").value(false));
+    }
+
+    @Test
+    void sinTelefonoNiCanalLosDevuelveEnNull() throws Exception {
+        UUID id = alta(martina("martina@gmail.com", null, null));
+
+        mvc.perform(get("/clientes/{id}", id))
+                .andExpect(jsonPath("$.telefono").value(nullValue()))
+                .andExpect(jsonPath("$.canalOrigen").value(nullValue()))
+                .andExpect(jsonPath("$.ultimoCanal").value(nullValue()));
+    }
+
+    @Test
+    void laVersionCambiaConUnRecontacto() throws Exception {
+        UUID id = alta(martina("martina@gmail.com", null, null));
+        String antes = mvc.perform(get("/clientes/{id}", id)).andReturn().getResponse().getHeader("ETag");
+
+        alta(martina("martina@gmail.com", null, "WHATSAPP"));
+
+        String despues = mvc.perform(get("/clientes/{id}", id)).andReturn().getResponse().getHeader("ETag");
+        assertThat(antes).isEqualTo("W/\"0\"");
+        assertThat(despues).isNotEqualTo(antes);
+    }
+
+    @Test
+    void clienteInexistente() throws Exception {
+        mvc.perform(get("/clientes/{id}", UUID.randomUUID()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.codigo").value("CLIENTE_NO_ENCONTRADO"));
+    }
+
+    @Test
+    void clienteNoActivoResponde404() throws Exception {
+        UUID id = alta(martina("martina@gmail.com", null, null));
+        jdbc.update("UPDATE cliente SET estado = 'ANONIMIZADO', email = NULL WHERE id = ?", id);
+
+        mvc.perform(get("/clientes/{id}", id))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.codigo").value("CLIENTE_NO_ENCONTRADO"));
+    }
+
+    private UUID alta(String cuerpo) throws Exception {
+        String respuesta = mvc.perform(post("/clientes").header("X-Api-Key", CLAVE)
+                        .contentType(MediaType.APPLICATION_JSON).content(cuerpo))
+                .andReturn().getResponse().getContentAsString();
+        return UUID.fromString(json.readTree(respuesta).get("clienteId").asText());
+    }
+}

@@ -1,5 +1,6 @@
-# Perfil para infra/docker-compose.yml. Las claves del CUIL no tienen valor por defecto:
-# si CLIENTES_CUIL_CLAVE o CLIENTES_CUIL_HMAC no están definidas, el servicio no arranca.
+# Perfil para infra/docker-compose.yml. Las claves del CUIL y la clave de servicio de leads no tienen valor
+# por defecto: si CLIENTES_CUIL_CLAVE, CLIENTES_CUIL_HMAC o CLIENTES_CLAVE_LEADS no están definidas,
+# el servicio no arranca.
 spring:
   datasource:
     url: ${CLIENTES_DB_URL:jdbc:postgresql://postgres:5432/clientes_db}

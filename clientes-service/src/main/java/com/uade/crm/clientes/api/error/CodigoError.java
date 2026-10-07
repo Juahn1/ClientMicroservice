@@ -10,6 +10,8 @@ public enum CodigoError {
 
     VALIDACION(HttpStatus.UNPROCESSABLE_ENTITY, "Datos inválidos"),
     JSON_INVALIDO(HttpStatus.BAD_REQUEST, "Cuerpo mal formado"),
+    TELEFONO_INVALIDO(HttpStatus.UNPROCESSABLE_ENTITY, "Teléfono inválido"),
+    CLAVE_SERVICIO_INVALIDA(HttpStatus.UNAUTHORIZED, "Clave de servicio inválida"),
     CLIENTE_NO_ENCONTRADO(HttpStatus.NOT_FOUND, "Cliente no encontrado"),
     /** Errores 4xx que resuelve Spring MVC y no están en el catálogo (método no permitido, ruta inexistente, etc.). */
     SOLICITUD_INVALIDA(HttpStatus.BAD_REQUEST, "Solicitud inválida"),

@@ -1,14 +1,21 @@
 package com.uade.crm.clientes.api.error;
 
+import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import com.uade.crm.clientes.api.seguridad.ClaveServicioInterceptor;
+import com.uade.crm.clientes.api.seguridad.ClaveServicioInvalidaException;
 import com.uade.crm.clientes.config.ClientesProperties;
+import com.uade.crm.clientes.domain.valor.TelefonoInvalidoException;
 import com.uade.crm.clientes.config.CorrelationIdFilter;
 import com.uade.crm.clientes.domain.model.ClienteNoEncontradoException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.context.MessageSourceResolvable;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatusCode;
@@ -20,10 +27,12 @@ import org.springframework.validation.FieldError;
 import org.springframework.validation.ObjectError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.NativeWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -43,6 +52,24 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ClienteNoEncontradoException.class)
     ResponseEntity<Object> clienteNoEncontrado(ClienteNoEncontradoException ex, NativeWebRequest request) {
         return problema(CodigoError.CLIENTE_NO_ENCONTRADO, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(ClaveServicioInvalidaException.class)
+    ResponseEntity<Object> claveServicioInvalida(ClaveServicioInvalidaException ex, NativeWebRequest request) {
+        ResponseEntity<Object> respuesta = problema(CodigoError.CLAVE_SERVICIO_INVALIDA, ex.getMessage(), request);
+        return ResponseEntity.status(respuesta.getStatusCode())
+                .header(HttpHeaders.WWW_AUTHENTICATE,
+                        "ApiKey realm=\"clientes\", header=\"" + ClaveServicioInterceptor.HEADER + "\"")
+                .body(respuesta.getBody());
+    }
+
+    @ExceptionHandler(TelefonoInvalidoException.class)
+    ResponseEntity<Object> telefonoInvalido(TelefonoInvalidoException ex, NativeWebRequest request) {
+        ResponseEntity<Object> respuesta = problema(CodigoError.TELEFONO_INVALIDO, ex.getMessage(), request);
+        if (respuesta.getBody() instanceof ProblemDetail problema) {
+            problema.setProperty("errores", List.of(new ErrorDeCampo("telefono", ex.getMessage())));
+        }
+        return respuesta;
     }
 
     @ExceptionHandler(Exception.class)
@@ -71,10 +98,50 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return validacion(errores, request);
     }
 
+    /**
+     * Un JSON bien formado con un valor que no se puede convertir al tipo del campo (por ejemplo, una provincia
+     * fuera del enum) es un error de validación de ese campo, no un cuerpo mal formado (design D9).
+     */
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
+        if (ex.getCause() instanceof InvalidFormatException formato && !formato.getPath().isEmpty()) {
+            return validacion(List.of(new ErrorDeCampo(ruta(formato), mensajeDeFormato(formato))), request);
+        }
         return problema(CodigoError.JSON_INVALIDO, "El cuerpo del request no es un JSON válido", request);
+    }
+
+    /**
+     * Un parámetro de consulta con un valor que no se puede convertir (por ejemplo {@code provincia=BS AS}) es un
+     * error de validación de ese parámetro, igual que en el cuerpo. Los demás casos (path, headers) siguen el
+     * tratamiento genérico.
+     */
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers,
+            HttpStatusCode status, WebRequest request) {
+        if (ex instanceof MethodArgumentTypeMismatchException argumento
+                && argumento.getParameter().hasParameterAnnotation(RequestParam.class)) {
+            Class<?> tipo = argumento.getRequiredType();
+            String mensaje = tipo != null && tipo.isEnum() ? valoresAceptados(tipo) : "formato inválido";
+            return validacion(List.of(new ErrorDeCampo(argumento.getName(), mensaje)), request);
+        }
+        return super.handleTypeMismatch(ex, headers, status, request);
+    }
+
+    private static String valoresAceptados(Class<?> enumeracion) {
+        return "valor no permitido; valores aceptados: " + Arrays.stream(enumeracion.getEnumConstants())
+                .map(Object::toString).collect(Collectors.joining(", "));
+    }
+
+    private static String ruta(InvalidFormatException ex) {
+        return ex.getPath().stream()
+                .map(ref -> ref.getFieldName() != null ? ref.getFieldName() : "[" + ref.getIndex() + "]")
+                .collect(Collectors.joining(".")).replace(".[", "[");
+    }
+
+    private static String mensajeDeFormato(InvalidFormatException ex) {
+        Class<?> tipo = ex.getTargetType();
+        return tipo != null && tipo.isEnum() ? valoresAceptados(tipo) : "formato inválido";
     }
 
     /** Errores que Spring MVC resuelve solo (405, 415, ruta inexistente...): se completan con codigo genérico. */

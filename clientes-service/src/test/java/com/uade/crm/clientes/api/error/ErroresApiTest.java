@@ -1,6 +1,9 @@
 package com.uade.crm.clientes.api.error;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -58,6 +61,27 @@ class ErroresApiTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.codigo").value("JSON_INVALIDO"))
                 .andExpect(jsonPath("$.correlationId", notNullValue()));
+    }
+
+    @Test
+    void valorFueraDelEnumResponde422ConElCampo() throws Exception {
+        mvc.perform(post("/clientes").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "nombre": "Martina", "provincia": "BS AS" }
+                                """))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.codigo").value("VALIDACION"))
+                .andExpect(jsonPath("$.errores[0].campo").value("provincia"))
+                .andExpect(jsonPath("$.errores[0].mensaje").value(containsString("BUENOS_AIRES")))
+                .andExpect(jsonPath("$.errores[0].mensaje").value(not(containsString("BS AS"))));
+    }
+
+    @Test
+    void nuevosCodigosDelCatalogo() {
+        assertThat(CodigoError.TELEFONO_INVALIDO.status().value()).isEqualTo(422);
+        assertThat(CodigoError.TELEFONO_INVALIDO.slug()).isEqualTo("telefono-invalido");
+        assertThat(CodigoError.CLAVE_SERVICIO_INVALIDA.status().value()).isEqualTo(401);
     }
 
     @Test
