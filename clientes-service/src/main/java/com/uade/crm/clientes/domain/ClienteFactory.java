@@ -1,5 +1,6 @@
 package com.uade.crm.clientes.domain;
 
+import com.uade.crm.clientes.domain.model.CambiosCliente;
 import com.uade.crm.clientes.domain.model.Cliente;
 import com.uade.crm.clientes.domain.model.SolicitudAlta;
 import com.uade.crm.clientes.domain.valor.Email;
@@ -30,6 +31,17 @@ public class ClienteFactory {
             Provincia provincia, String localidad, CanalOrigen canal) {
         return new SolicitudAlta(nombre, apellido, Email.de(email),
                 Telefono.opcional(telefono, regionTelefono).orElse(null), provincia, localidad, canal);
+    }
+
+    /**
+     * Normaliza los datos de una edición con las mismas reglas que el alta (design D2 del change 03). Un valor null
+     * o en blanco queda null ("no modificar"); un teléfono informado inválido lanza {@code TelefonoInvalidoException}.
+     */
+    public CambiosCliente cambios(String nombre, String apellido, String email, String telefono, Provincia provincia,
+            String localidad) {
+        return new CambiosCliente(nombre, apellido,
+                email == null || email.isBlank() ? null : Email.de(email),
+                Telefono.opcional(telefono, regionTelefono).orElse(null), provincia, localidad);
     }
 
     public Cliente crear(SolicitudAlta solicitud) {

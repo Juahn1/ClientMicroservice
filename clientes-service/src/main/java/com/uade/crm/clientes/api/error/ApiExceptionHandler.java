@@ -1,11 +1,16 @@
 package com.uade.crm.clientes.api.error;
 
 import com.fasterxml.jackson.databind.exc.InvalidFormatException;
+import com.uade.crm.clientes.api.PrecondicionRequeridaException;
 import com.uade.crm.clientes.api.seguridad.ClaveServicioInterceptor;
 import com.uade.crm.clientes.api.seguridad.ClaveServicioInvalidaException;
+import com.uade.crm.clientes.application.ConfirmacionInvalidaException;
+import com.uade.crm.clientes.application.EmailEnUsoException;
+import com.uade.crm.clientes.application.VersionDesactualizadaException;
 import com.uade.crm.clientes.config.ClientesProperties;
 import com.uade.crm.clientes.domain.valor.TelefonoInvalidoException;
 import com.uade.crm.clientes.config.CorrelationIdFilter;
+import com.uade.crm.clientes.domain.model.ClienteAnonimizadoException;
 import com.uade.crm.clientes.domain.model.ClienteNoEncontradoException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
@@ -54,6 +59,34 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return problema(CodigoError.CLIENTE_NO_ENCONTRADO, ex.getMessage(), request);
     }
 
+    /** 410 sin datos del cliente: solo se informa que existió y fue anonimizado (design D7). */
+    @ExceptionHandler(ClienteAnonimizadoException.class)
+    ResponseEntity<Object> clienteAnonimizado(ClienteAnonimizadoException ex, NativeWebRequest request) {
+        return problema(CodigoError.CLIENTE_ANONIMIZADO, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(PrecondicionRequeridaException.class)
+    ResponseEntity<Object> precondicionRequerida(PrecondicionRequeridaException ex, NativeWebRequest request) {
+        return problema(CodigoError.PRECONDICION_REQUERIDA, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(VersionDesactualizadaException.class)
+    ResponseEntity<Object> versionDesactualizada(VersionDesactualizadaException ex, NativeWebRequest request) {
+        return problema(CodigoError.VERSION_DESACTUALIZADA, ex.getMessage(), request);
+    }
+
+    @ExceptionHandler(EmailEnUsoException.class)
+    ResponseEntity<Object> emailEnUso(EmailEnUsoException ex, NativeWebRequest request) {
+        return conErrorDeCampo(problema(CodigoError.EMAIL_EN_USO, ex.getMessage(), request), "email",
+                "ya pertenece a otro cliente");
+    }
+
+    @ExceptionHandler(ConfirmacionInvalidaException.class)
+    ResponseEntity<Object> confirmacionInvalida(ConfirmacionInvalidaException ex, NativeWebRequest request) {
+        return conErrorDeCampo(problema(CodigoError.CONFIRMACION_INVALIDA, ex.getMessage(), request), "email",
+                "no coincide con el email del cliente");
+    }
+
     @ExceptionHandler(ClaveServicioInvalidaException.class)
     ResponseEntity<Object> claveServicioInvalida(ClaveServicioInvalidaException ex, NativeWebRequest request) {
         ResponseEntity<Object> respuesta = problema(CodigoError.CLAVE_SERVICIO_INVALIDA, ex.getMessage(), request);
@@ -65,9 +98,15 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(TelefonoInvalidoException.class)
     ResponseEntity<Object> telefonoInvalido(TelefonoInvalidoException ex, NativeWebRequest request) {
-        ResponseEntity<Object> respuesta = problema(CodigoError.TELEFONO_INVALIDO, ex.getMessage(), request);
+        return conErrorDeCampo(problema(CodigoError.TELEFONO_INVALIDO, ex.getMessage(), request), "telefono",
+                ex.getMessage());
+    }
+
+    /** Asocia el error a un campo del formulario, con el mismo formato que los errores de validación. */
+    private static ResponseEntity<Object> conErrorDeCampo(ResponseEntity<Object> respuesta, String campo,
+            String mensaje) {
         if (respuesta.getBody() instanceof ProblemDetail problema) {
-            problema.setProperty("errores", List.of(new ErrorDeCampo("telefono", ex.getMessage())));
+            problema.setProperty("errores", List.of(new ErrorDeCampo(campo, mensaje)));
         }
         return respuesta;
     }

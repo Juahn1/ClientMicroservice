@@ -89,14 +89,33 @@ class FichaClienteApiTest {
                 .andExpect(jsonPath("$.codigo").value("CLIENTE_NO_ENCONTRADO"));
     }
 
+    /** Scenario: Cliente anonimizado (change 03). */
     @Test
-    void clienteNoActivoResponde404() throws Exception {
+    void clienteAnonimizadoResponde410SinDatos() throws Exception {
         UUID id = alta(martina("martina@gmail.com", null, null));
-        jdbc.update("UPDATE cliente SET estado = 'ANONIMIZADO', email = NULL WHERE id = ?", id);
+        jdbc.update("UPDATE cliente SET estado = 'ANONIMIZADO', email = NULL, nombre = 'ANONIMIZADO', "
+                + "apellido = 'ANONIMIZADO', anonimizado_en = now() WHERE id = ?", id);
 
         mvc.perform(get("/clientes/{id}", id))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.codigo").value("CLIENTE_NO_ENCONTRADO"));
+                .andExpect(status().isGone())
+                .andExpect(jsonPath("$.codigo").value("CLIENTE_ANONIMIZADO"))
+                .andExpect(jsonPath("$.nombre").doesNotExist())
+                .andExpect(jsonPath("$.email").doesNotExist());
+    }
+
+    @Test
+    void laFichaIncluyeLaMarcaNoContactar() throws Exception {
+        UUID id = alta(martina("martina@gmail.com", null, null));
+
+        mvc.perform(get("/clientes/{id}", id))
+                .andExpect(jsonPath("$.noContactar").value(false))
+                .andExpect(jsonPath("$.noContactarDesde").value(nullValue()));
+
+        jdbc.update("UPDATE cliente SET no_contactar = TRUE, no_contactar_desde = now() WHERE id = ?", id);
+
+        mvc.perform(get("/clientes/{id}", id))
+                .andExpect(jsonPath("$.noContactar").value(true))
+                .andExpect(jsonPath("$.noContactarDesde").isString());
     }
 
     private UUID alta(String cuerpo) throws Exception {

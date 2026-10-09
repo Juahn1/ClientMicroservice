@@ -18,4 +18,8 @@ interface ClienteJpaRepository extends JpaRepository<ClienteEntity, UUID>, JpaSp
     Optional<ClienteEntity> findParaActualizar(String email, EstadoCliente estado);
 
     Optional<ClienteEntity> findByIdAndEstado(UUID id, EstadoCliente estado);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select c from ClienteEntity c where c.id = :id")
+    Optional<ClienteEntity> findPorIdParaActualizar(UUID id);
 }

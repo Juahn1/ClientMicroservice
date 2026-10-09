@@ -125,7 +125,8 @@ public record ClientesProperties(
         }
     }
 
-    public record Kafka(@Valid @NotNull Topicos topicos) {
+    /** Tópicos que publica el servicio; particiones y réplicas se usan al crearlos (design D8). */
+    public record Kafka(@Valid @NotNull Topicos topicos, @Positive int particiones, @Positive int replicas) {
 
         public record Topicos(@NotBlank String clienteActualizado, @NotBlank String clienteAnonimizado) {
         }

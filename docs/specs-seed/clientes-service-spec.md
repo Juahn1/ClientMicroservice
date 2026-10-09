@@ -198,6 +198,12 @@ com.uade.crm.clientes
 
 ### 5.2 Modelo de datos (por migración)
 
+> **Nota (change 03, 2026-10-08):** las migraciones se numeran en el orden en que se mergean (S-05). El change 03
+> agregó `V2__no_contactar.sql` (marca no contactar y check de anonimización), así que los números de abajo se
+> corren uno: CUIL y consentimientos (04) pasa a `V3`, situación crediticia (05) a `V4`, notas (06) a `V5` y
+> preferencias (07) a `V6`. Además, `V1` real usa índice único sobre `email` (no sobre teléfono) y separa
+> `nombre`/`apellido`: ver `openspec/specs/` y los changes archivados.
+
 ```sql
 -- V1__cliente.sql  (change 02)
 CREATE TABLE cliente (

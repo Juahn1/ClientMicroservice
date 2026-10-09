@@ -6,10 +6,10 @@ import com.uade.crm.clientes.domain.model.Coincidencia;
 import com.uade.crm.clientes.domain.model.ResultadoAlta;
 import com.uade.crm.clientes.domain.model.SolicitudAlta;
 import com.uade.crm.clientes.domain.port.ClienteRepositorio;
+import com.uade.crm.clientes.domain.port.EmailDuplicadoException;
 import java.time.Clock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -43,7 +43,7 @@ public class AltaClienteService {
     public ResultadoAlta registrar(SolicitudAlta solicitud) {
         try {
             return transaccion.execute(estado -> intentar(solicitud));
-        } catch (DataIntegrityViolationException carrera) {
+        } catch (EmailDuplicadoException carrera) {
             log.info("Alta simultánea con un email ya registrado: se resuelve como recontacto");
             return transaccion.execute(estado -> intentar(solicitud));
         }

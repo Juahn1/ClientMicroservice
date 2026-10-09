@@ -9,7 +9,8 @@ import java.util.UUID;
 
 /**
  * Resumen de un cliente en los resultados de búsqueda (design D8). Es deliberadamente más chico que la ficha:
- * cuando el change 04 sume el CUIL a la ficha, no va a aparecer en las listas.
+ * cuando el change 04 sume el CUIL a la ficha, no va a aparecer en las listas. Incluye {@code noContactar} para que
+ * el telemarketer vea en la lista a quién no llamar (change 03).
  */
 public record ClienteResumenResponse(
         UUID id,
@@ -20,7 +21,8 @@ public record ClienteResumenResponse(
         Provincia provincia,
         CanalOrigen ultimoCanal,
         int contactosRegistrados,
-        Instant ultimoContactoEn) {
+        Instant ultimoContactoEn,
+        boolean noContactar) {
 
     public static ClienteResumenResponse de(Cliente c) {
         return new ClienteResumenResponse(
@@ -32,6 +34,7 @@ public record ClienteResumenResponse(
                 c.provincia(),
                 c.ultimoCanal().orElse(null),
                 c.contactosRegistrados(),
-                c.ultimoContactoEn());
+                c.ultimoContactoEn(),
+                c.noContactar());
     }
 }

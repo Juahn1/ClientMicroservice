@@ -14,6 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.uade.crm.pruebas.PruebaWebMvc;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
@@ -100,5 +102,30 @@ class ErroresApiTest {
                 .andExpect(status().isInternalServerError())
                 .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
                 .andExpect(jsonPath("$.codigo").value("ERROR_INTERNO"));
+    }
+
+    /** Códigos del change 03 (design D10): status, codigo, type y correlationId. */
+    @ParameterizedTest
+    @CsvSource({
+            "CLIENTE_ANONIMIZADO, 410, cliente-anonimizado",
+            "PRECONDICION_REQUERIDA, 428, precondicion-requerida",
+            "VERSION_DESACTUALIZADA, 412, version-desactualizada",
+            "EMAIL_EN_USO, 409, email-en-uso",
+            "CONFIRMACION_INVALIDA, 422, confirmacion-invalida"})
+    void codigosDeEdicionYBaja(String codigo, int status, String slug) throws Exception {
+        mvc.perform(post("/pruebas/errores/{codigo}", codigo).header("X-Correlation-Id", "abc-123"))
+                .andExpect(status().is(status))
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.codigo").value(codigo))
+                .andExpect(jsonPath("$.type").value("https://crm.uade.local/errores/" + slug))
+                .andExpect(jsonPath("$.correlationId").value("abc-123"));
+    }
+
+    @Test
+    void emailEnUsoYConfirmacionInvalidaSeAsocianAlCampoEmail() throws Exception {
+        for (String codigo : new String[] {"EMAIL_EN_USO", "CONFIRMACION_INVALIDA"}) {
+            mvc.perform(post("/pruebas/errores/{codigo}", codigo))
+                    .andExpect(jsonPath("$.errores[0].campo").value("email"));
+        }
     }
 }

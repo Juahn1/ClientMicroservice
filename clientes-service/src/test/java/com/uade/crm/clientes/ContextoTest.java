@@ -64,7 +64,7 @@ class ContextoTest {
         }
         assertThat(flyway.info().applied())
                 .extracting(migracion -> migracion.getScript())
-                .containsExactly("V1__cliente.sql");
+                .containsExactly("V1__cliente.sql", "V2__no_contactar.sql");
     }
 
     @Test

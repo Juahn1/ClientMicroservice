@@ -60,6 +60,12 @@ public class ClienteEntity {
     @Column(name = "ultimo_contacto_en", nullable = false)
     private Instant ultimoContactoEn;
 
+    @Column(name = "no_contactar", nullable = false)
+    private boolean noContactar;
+
+    @Column(name = "no_contactar_desde")
+    private Instant noContactarDesde;
+
     @Column(name = "requiere_revision", nullable = false)
     private boolean requiereRevision;
 
@@ -238,6 +244,22 @@ public class ClienteEntity {
 
     void setActualizadoEn(Instant actualizadoEn) {
         this.actualizadoEn = actualizadoEn;
+    }
+
+    boolean isNoContactar() {
+        return noContactar;
+    }
+
+    void setNoContactar(boolean noContactar) {
+        this.noContactar = noContactar;
+    }
+
+    Instant getNoContactarDesde() {
+        return noContactarDesde;
+    }
+
+    void setNoContactarDesde(Instant noContactarDesde) {
+        this.noContactarDesde = noContactarDesde;
     }
 
     Instant getAnonimizadoEn() {

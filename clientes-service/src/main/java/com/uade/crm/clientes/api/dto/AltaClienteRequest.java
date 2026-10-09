@@ -26,7 +26,7 @@ public record AltaClienteRequest(
         String apellido,
 
         @Schema(example = "martina@gmail.com")
-        @NotBlank @Size(max = 254) @Email(regexp = ".+@.+\\..+", message = "debe ser un email válido con dominio")
+        @NotBlank @Size(max = 254) @Email(regexp = EMAIL, message = MENSAJE_EMAIL)
         String email,
 
         @Schema(description = "Opcional. Se normaliza a móvil argentino en E.164.", example = "11 1234-5678")
@@ -46,6 +46,8 @@ public record AltaClienteRequest(
     static final String NOMBRE = "\\p{L}[\\p{L} '’-]*\\p{L}";
     static final String MENSAJE_NOMBRE =
             "debe tener al menos 2 letras y solo puede contener letras, espacios, apóstrofo o guion";
+    static final String EMAIL = ".+@.+\\..+";
+    static final String MENSAJE_EMAIL = "debe ser un email válido con dominio";
 
     /** Se recorta antes de validar: " Martina@Gmail.com " es un email válido y el largo se mide sin espacios. */
     public AltaClienteRequest {

@@ -1,6 +1,11 @@
 package com.uade.crm.pruebas;
 
+import com.uade.crm.clientes.api.PrecondicionRequeridaException;
 import com.uade.crm.clientes.api.seguridad.RequiereClaveServicio;
+import com.uade.crm.clientes.application.ConfirmacionInvalidaException;
+import com.uade.crm.clientes.application.EmailEnUsoException;
+import com.uade.crm.clientes.application.VersionDesactualizadaException;
+import com.uade.crm.clientes.domain.model.ClienteAnonimizadoException;
 import com.uade.crm.clientes.domain.model.ClienteNoEncontradoException;
 import com.uade.crm.contracts.Provincia;
 import jakarta.validation.Valid;
@@ -50,6 +55,20 @@ public class PruebaController {
     @PostMapping("/clientes/falla")
     void falla(@RequestBody AltaPrueba alta) {
         throw new IllegalStateException("Fallo procesando CUIL " + alta.cuil() + " y teléfono " + alta.telefono());
+    }
+
+    /** Lanza la excepción que corresponde a cada código del change 03, para probar su traducción. */
+    @PostMapping("/pruebas/errores/{codigo}")
+    void error(@PathVariable String codigo) {
+        UUID id = UUID.randomUUID();
+        throw switch (codigo) {
+            case "CLIENTE_ANONIMIZADO" -> new ClienteAnonimizadoException(id);
+            case "PRECONDICION_REQUERIDA" -> new PrecondicionRequeridaException();
+            case "VERSION_DESACTUALIZADA" -> new VersionDesactualizadaException(id);
+            case "EMAIL_EN_USO" -> new EmailEnUsoException(id);
+            case "CONFIRMACION_INVALIDA" -> new ConfirmacionInvalidaException(id);
+            default -> new IllegalArgumentException(codigo);
+        };
     }
 
     public record AltaPrueba(@NotBlank @Size(min = 2, max = 120) String nombre, @Email String email, String cuil,

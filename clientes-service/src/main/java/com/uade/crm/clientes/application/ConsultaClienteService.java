@@ -2,6 +2,7 @@ package com.uade.crm.clientes.application;
 
 import com.uade.crm.clientes.config.ClientesProperties;
 import com.uade.crm.clientes.domain.model.Cliente;
+import com.uade.crm.clientes.domain.model.ClienteAnonimizadoException;
 import com.uade.crm.clientes.domain.model.ClienteNoEncontradoException;
 import com.uade.crm.clientes.domain.model.Pagina;
 import com.uade.crm.clientes.domain.port.ClienteRepositorio;
@@ -27,9 +28,13 @@ public class ConsultaClienteService {
         this.properties = properties;
     }
 
-    /** Un cliente que no existe o que no está activo responde igual: 404 (el 03 decide entre 410 y 404). */
+    /** Un ID que nunca existió responde 404; un cliente anonimizado, 410 (design D7 del change 03). */
     public Cliente obtener(UUID id) {
-        return repositorio.buscarActivoPorId(id).orElseThrow(() -> new ClienteNoEncontradoException(id));
+        Cliente cliente = repositorio.buscarPorId(id).orElseThrow(() -> new ClienteNoEncontradoException(id));
+        if (!cliente.activo()) {
+            throw new ClienteAnonimizadoException(id);
+        }
+        return cliente;
     }
 
     /**

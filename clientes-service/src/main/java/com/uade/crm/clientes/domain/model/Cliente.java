@@ -5,37 +5,46 @@ import com.uade.crm.clientes.domain.valor.NombreBusqueda;
 import com.uade.crm.clientes.domain.valor.Telefono;
 import com.uade.crm.contracts.CanalOrigen;
 import com.uade.crm.contracts.Provincia;
+import com.uade.crm.contracts.clientes.CampoCliente;
 import java.time.Instant;
+import java.util.EnumSet;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * Ficha única del comprador. Los clientes nuevos los crea {@code ClienteFactory}; la persistencia los
- * reconstruye con {@link #builder()}.
+ * reconstruye con {@link #builder()}. Las operaciones que modifican la ficha devuelven qué cambió, para que la
+ * aplicación decida si guarda y si publica eventos (design D2 del change 03).
  */
 public class Cliente {
 
+    /** Reemplaza nombre y apellido al anonimizar: las columnas son obligatorias. */
+    public static final String ANONIMIZADO = "ANONIMIZADO";
+
     private final UUID id;
-    private final String nombre;
-    private final String apellido;
-    private final NombreBusqueda nombreBusqueda;
-    private final Email email;
+    private String nombre;
+    private String apellido;
+    private NombreBusqueda nombreBusqueda;
+    private Email email;
     private Telefono telefono;
     private Telefono telefonoAlternativo;
-    private final Provincia provincia;
+    private Provincia provincia;
     private String localidad;
     private CanalOrigen canalOrigen;
     private CanalOrigen ultimoCanal;
     private int contactosRegistrados;
     private Instant ultimoContactoEn;
+    private boolean noContactar;
+    private Instant noContactarDesde;
     private final boolean requiereRevision;
     private final String motivoRevision;
-    private final EstadoCliente estado;
+    private EstadoCliente estado;
     private final Long version;
     private final Instant creadoEn;
     private Instant actualizadoEn;
-    private final Instant anonimizadoEn;
+    private Instant anonimizadoEn;
 
     private Cliente(Builder b) {
         this.id = Objects.requireNonNull(b.id, "id");
@@ -58,6 +67,11 @@ public class Cliente {
         }
         this.contactosRegistrados = b.contactosRegistrados;
         this.ultimoContactoEn = Objects.requireNonNull(b.ultimoContactoEn, "ultimoContactoEn");
+        if (b.noContactar != (b.noContactarDesde != null)) {
+            throw new IllegalArgumentException("noContactarDesde se informa si y solo si el cliente tiene la marca");
+        }
+        this.noContactar = b.noContactar;
+        this.noContactarDesde = b.noContactarDesde;
         this.requiereRevision = b.requiereRevision;
         this.motivoRevision = b.motivoRevision;
         this.version = b.version;
@@ -73,12 +87,11 @@ public class Cliente {
     /**
      * La misma persona volvió a contactar a la agencia (design D4, paso 4). El alta lo puede disparar cualquiera
      * que conozca el email, así que nunca pisa nombre, apellido ni provincia: solo completa lo que falta, suma un
-     * contacto y actualiza el último contacto y canal.
+     * contacto y actualiza el último contacto y canal. Si tenía la marca no contactar, la quita: la persona volvió
+     * a pedir contacto (change 03).
      */
     public void registrarRecontacto(SolicitudAlta solicitud, Instant ahora) {
-        if (estado != EstadoCliente.ACTIVO) {
-            throw new IllegalStateException("Solo un cliente activo puede registrar un recontacto");
-        }
+        exigirActivo("registrar un recontacto");
         if (localidad == null) {
             localidad = solicitud.localidad();
         }
@@ -89,9 +102,104 @@ public class Cliente {
             ultimoCanal = solicitud.canal();
         }
         completarTelefono(solicitud.telefono());
+        noContactar = false;
+        noContactarDesde = null;
         contactosRegistrados++;
         ultimoContactoEn = ahora;
         actualizadoEn = ahora;
+    }
+
+    /**
+     * Edición por parte del personal (design D2 del change 03): aplica los valores informados y devuelve los campos
+     * que realmente cambiaron, vacío si no hubo cambios. Los valores llegan normalizados, así que el mismo email o
+     * teléfono en otro formato no cuenta como cambio. Un null no modifica.
+     */
+    public Set<CampoCliente> editar(CambiosCliente cambios, Instant ahora) {
+        exigirActivo("editarse");
+        Set<CampoCliente> modificados = EnumSet.noneOf(CampoCliente.class);
+        if (cambios.nombre() != null && !cambios.nombre().equals(nombre)) {
+            nombre = cambios.nombre();
+            modificados.add(CampoCliente.NOMBRE);
+        }
+        if (cambios.apellido() != null && !cambios.apellido().equals(apellido)) {
+            apellido = cambios.apellido();
+            modificados.add(CampoCliente.APELLIDO);
+        }
+        if (cambios.email() != null && !cambios.email().equals(email)) {
+            email = cambios.email();
+            modificados.add(CampoCliente.EMAIL);
+        }
+        if (cambios.telefono() != null && !cambios.telefono().equals(telefono)) {
+            telefono = cambios.telefono();
+            modificados.add(CampoCliente.TELEFONO);
+        }
+        if (cambios.provincia() != null && cambios.provincia() != provincia) {
+            provincia = cambios.provincia();
+            modificados.add(CampoCliente.PROVINCIA);
+        }
+        if (cambios.localidad() != null && !cambios.localidad().equals(localidad)) {
+            localidad = cambios.localidad();
+            modificados.add(CampoCliente.LOCALIDAD);
+        }
+        if (modificados.contains(CampoCliente.NOMBRE) || modificados.contains(CampoCliente.APELLIDO)) {
+            nombreBusqueda = NombreBusqueda.de(nombre, apellido);
+        }
+        if (!modificados.isEmpty()) {
+            actualizadoEn = ahora;
+        }
+        return modificados;
+    }
+
+    /** El cliente pidió que no lo contacten más (design D5 del change 03). Devuelve false si ya tenía la marca. */
+    public boolean marcarNoContactar(Instant ahora) {
+        exigirActivo("marcarse como no contactar");
+        if (noContactar) {
+            return false;
+        }
+        noContactar = true;
+        noContactarDesde = ahora;
+        actualizadoEn = ahora;
+        return true;
+    }
+
+    /** Quita la marca no contactar. Devuelve false si el cliente no la tenía. */
+    public boolean quitarNoContactar(Instant ahora) {
+        exigirActivo("desmarcarse como no contactar");
+        if (!noContactar) {
+            return false;
+        }
+        noContactar = false;
+        noContactarDesde = null;
+        actualizadoEn = ahora;
+        return true;
+    }
+
+    /**
+     * Baja por derecho de supresión (Ley 25.326, design D6 del change 03): elimina los datos personales y conserva
+     * el id, la provincia, los canales, el contador, las fechas y la marca no contactar. Devuelve false si ya estaba
+     * anonimizado.
+     */
+    public boolean anonimizar(Instant ahora) {
+        if (estado == EstadoCliente.ANONIMIZADO) {
+            return false;
+        }
+        nombre = ANONIMIZADO;
+        apellido = ANONIMIZADO;
+        nombreBusqueda = NombreBusqueda.de(nombre, apellido);
+        email = null;
+        telefono = null;
+        telefonoAlternativo = null;
+        localidad = null;
+        estado = EstadoCliente.ANONIMIZADO;
+        anonimizadoEn = ahora;
+        actualizadoEn = ahora;
+        return true;
+    }
+
+    private void exigirActivo(String operacion) {
+        if (estado != EstadoCliente.ACTIVO) {
+            throw new IllegalStateException("Solo un cliente activo puede " + operacion);
+        }
     }
 
     /** Un teléfono distinto del principal se guarda como alternativo solo si no había otro. */
@@ -122,6 +230,7 @@ public class Cliente {
         return nombreBusqueda;
     }
 
+    /** Null solo en un cliente anonimizado. */
     public Email email() {
         return email;
     }
@@ -156,6 +265,14 @@ public class Cliente {
 
     public Instant ultimoContactoEn() {
         return ultimoContactoEn;
+    }
+
+    public boolean noContactar() {
+        return noContactar;
+    }
+
+    public Optional<Instant> noContactarDesde() {
+        return Optional.ofNullable(noContactarDesde);
     }
 
     public boolean requiereRevision() {
@@ -211,6 +328,8 @@ public class Cliente {
         private CanalOrigen ultimoCanal;
         private int contactosRegistrados = 1;
         private Instant ultimoContactoEn;
+        private boolean noContactar;
+        private Instant noContactarDesde;
         private boolean requiereRevision;
         private String motivoRevision;
         private EstadoCliente estado = EstadoCliente.ACTIVO;
@@ -279,6 +398,16 @@ public class Cliente {
 
         public Builder ultimoContactoEn(Instant ultimoContactoEn) {
             this.ultimoContactoEn = ultimoContactoEn;
+            return this;
+        }
+
+        public Builder noContactar(boolean noContactar) {
+            this.noContactar = noContactar;
+            return this;
+        }
+
+        public Builder noContactarDesde(Instant noContactarDesde) {
+            this.noContactarDesde = noContactarDesde;
             return this;
         }
 

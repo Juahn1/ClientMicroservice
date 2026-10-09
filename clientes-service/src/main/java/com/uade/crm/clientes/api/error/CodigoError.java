@@ -13,6 +13,11 @@ public enum CodigoError {
     TELEFONO_INVALIDO(HttpStatus.UNPROCESSABLE_ENTITY, "Teléfono inválido"),
     CLAVE_SERVICIO_INVALIDA(HttpStatus.UNAUTHORIZED, "Clave de servicio inválida"),
     CLIENTE_NO_ENCONTRADO(HttpStatus.NOT_FOUND, "Cliente no encontrado"),
+    CLIENTE_ANONIMIZADO(HttpStatus.GONE, "Cliente anonimizado"),
+    EMAIL_EN_USO(HttpStatus.CONFLICT, "El email ya pertenece a otro cliente"),
+    PRECONDICION_REQUERIDA(HttpStatus.PRECONDITION_REQUIRED, "Falta If-Match"),
+    VERSION_DESACTUALIZADA(HttpStatus.PRECONDITION_FAILED, "Versión desactualizada"),
+    CONFIRMACION_INVALIDA(HttpStatus.UNPROCESSABLE_ENTITY, "Confirmación inválida"),
     /** Errores 4xx que resuelve Spring MVC y no están en el catálogo (método no permitido, ruta inexistente, etc.). */
     SOLICITUD_INVALIDA(HttpStatus.BAD_REQUEST, "Solicitud inválida"),
     ERROR_INTERNO(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno");

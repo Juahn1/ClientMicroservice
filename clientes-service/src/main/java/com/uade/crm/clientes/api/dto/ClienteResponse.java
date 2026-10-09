@@ -24,6 +24,8 @@ public record ClienteResponse(
         CanalOrigen ultimoCanal,
         int contactosRegistrados,
         Instant ultimoContactoEn,
+        boolean noContactar,
+        Instant noContactarDesde,
         boolean requiereRevision) {
 
     public static ClienteResponse de(Cliente c) {
@@ -40,6 +42,8 @@ public record ClienteResponse(
                 c.ultimoCanal().orElse(null),
                 c.contactosRegistrados(),
                 c.ultimoContactoEn(),
+                c.noContactar(),
+                c.noContactarDesde().orElse(null),
                 c.requiereRevision());
     }
 }

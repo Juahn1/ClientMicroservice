@@ -19,12 +19,22 @@ public interface ClienteRepositorio {
 
     Optional<Cliente> buscarActivoPorId(UUID id);
 
+    /** Cliente en cualquier estado: distingue un ID inexistente (404) de uno anonimizado (410). */
+    Optional<Cliente> buscarPorId(UUID id);
+
+    /**
+     * Igual que {@link #buscarPorId} pero bloquea la fila hasta el fin de la transacción: las operaciones sin
+     * {@code If-Match} (marca no contactar, anonimización) esperan a un recontacto en curso en lugar de fallar por
+     * control optimista.
+     */
+    Optional<Cliente> buscarPorIdParaActualizar(UUID id);
+
     /** Clientes activos que cumplen todos los filtros, del último contacto más reciente al más viejo. */
     Pagina<Cliente> buscar(FiltroBusqueda filtro, int pagina, int tamanio);
 
     /**
      * Inserta o actualiza el cliente y devuelve la versión guardada. Si ya hay otro cliente activo con el mismo
-     * email lanza {@code DataIntegrityViolationException}; si la versión quedó desactualizada,
+     * email lanza {@link EmailDuplicadoException}; si la versión quedó desactualizada,
      * {@code OptimisticLockingFailureException}.
      */
     Cliente guardar(Cliente cliente);

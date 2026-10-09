@@ -87,7 +87,8 @@ class BusquedaClientesApiTest {
         UUID anonimizado = cliente("Carla", "Paz", "carla@gmail.com", null, Provincia.SALTA);
         ultimoContacto(viejo, "2026-10-01T10:00:00Z");
         ultimoContacto(nuevo, "2026-10-05T10:00:00Z");
-        jdbc.update("UPDATE cliente SET estado = 'ANONIMIZADO', email = NULL WHERE id = ?", anonimizado);
+        jdbc.update("UPDATE cliente SET estado = 'ANONIMIZADO', email = NULL, localidad = NULL WHERE id = ?",
+                anonimizado);
 
         mvc.perform(get("/clientes"))
                 .andExpect(jsonPath("$.contenido", hasSize(2)))
@@ -140,6 +141,7 @@ class BusquedaClientesApiTest {
                 .andExpect(jsonPath("$.contenido[0].ultimoCanal").value("INSTAGRAM"))
                 .andExpect(jsonPath("$.contenido[0].contactosRegistrados").value(1))
                 .andExpect(jsonPath("$.contenido[0].ultimoContactoEn").isString())
+                .andExpect(jsonPath("$.contenido[0].noContactar").value(false))
                 // Es un resumen: la ficha completa se pide por id.
                 .andExpect(jsonPath("$.contenido[0].localidad").doesNotExist())
                 .andExpect(jsonPath("$.contenido[0].telefonoAlternativo").doesNotExist());

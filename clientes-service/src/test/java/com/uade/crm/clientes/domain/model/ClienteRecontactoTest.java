@@ -91,6 +91,19 @@ class ClienteRecontactoTest {
         assertThat(cliente.localidad()).contains("San Isidro");
     }
 
+    /** Scenario: Recontacto de un cliente marcado como no contactar (change 03). */
+    @Test
+    void recontactoDeUnClienteMarcadoComoNoContactar() {
+        Cliente marcado = cliente(null, null, null);
+        marcado.marcarNoContactar(ALTA);
+
+        marcado.registrarRecontacto(solicitud(null, null), RECONTACTO);
+
+        assertThat(marcado.noContactar()).isFalse();
+        assertThat(marcado.noContactarDesde()).isEmpty();
+        assertThat(marcado.contactosRegistrados()).isEqualTo(2);
+    }
+
     @Test
     void unClienteAnonimizadoNoRegistraRecontactos() {
         Cliente anonimizado = Cliente.builder().id(UUID.randomUUID()).nombre("ANONIMIZADO").apellido("ANONIMIZADO")

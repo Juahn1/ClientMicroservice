@@ -10,7 +10,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
- * Aplicación completa contra PostgreSQL real. Todas las clases que la usan comparten el mismo contexto de Spring
+ * Aplicación completa contra PostgreSQL y Kafka reales. Todas las clases que la usan comparten el mismo contexto de Spring
  * (y por lo tanto el mismo contenedor), así que cada una tiene que limpiar los datos que crea.
  */
 @Target(ElementType.TYPE)
@@ -18,6 +18,6 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
-@Import(PostgresDePrueba.class)
+@Import({PostgresDePrueba.class, KafkaDePrueba.class})
 public @interface PruebaIntegracion {
 }

@@ -33,6 +33,8 @@ class ClaveServicioPropertiesTest {
                     "clientes.paginacion.tamanio-por-defecto=20",
                     "clientes.kafka.topicos.cliente-actualizado=a",
                     "clientes.kafka.topicos.cliente-anonimizado=b",
+                    "clientes.kafka.particiones=3",
+                    "clientes.kafka.replicas=1",
                     "clientes.errores.tipo-base=https://crm.uade.local/errores/");
 
     @Test
