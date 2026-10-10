@@ -1115,6 +1115,17 @@ origen y fecha; MUST permitir consultarlos y revocarlos, y MUST mantener como m�
 
 ### 6.5 `clientes-05-situacion-crediticia`
 
+> **Nota (change 05, 2026-10-10):** implementado con el mismo criterio "MVP+" del 04. Diferencias con el texto de
+> abajo: migración `V4__situacion_crediticia.sql` (no V3); `SIN_CONSENTIMIENTO` existe en el enum pero está reservado,
+> porque con la invariante del 04 (CUIL si y solo si hay consentimiento vigente) recién aparece con la revocación de
+> `clientes-15`; el endpoint exige `X-Api-Key` con una clave propia de `calificacion` (`CLIENTES_CLAVE_CALIFICACION`),
+> distinta de la de `leads`; en `contracts` va solo el enum `EstadoSituacionCrediticia`, sin DTO compartido; el
+> escenario "al restablecerse la fuente, la siguiente consulta la vuelve a intentar" pasa a "una consulta posterior a
+> la ventana de espera del circuit breaker vuelve a consultar la fuente"; el timeout lo impone cada fuente (contrato del
+> puerto, verificado por `ContratoFuenteSituacionTest`) y el decorator de resiliencia solo tiene el circuit breaker;
+> la caché y la resiliencia son decorators del puerto (caché → resiliencia → fuente); no hay integración con revocación
+> ni con reemplazo de CUIL (no existen todavía). Ver el change archivado.
+
 **proposal.md**
 
 ````markdown
@@ -1405,13 +1416,13 @@ Combinados con los casos de la sección 6.3 del documento de arquitectura (preci
 | ID | Funcionalidad | Entrega | Notas |
 | --- | --- | --- | --- |
 | clientes-08 | **Reactivación por stock (RFC-11).** Consumir `vehiculo-ingresado` y `vehiculo-precio-actualizado` de `vehiculos`, buscar interesados y publicar `OportunidadDetectada` con `vehiculoId` y la lista de `clienteId`. `leads` crea leads de reactivación en la cola. | Segunda | Demuestra integración asincrónica en ambos sentidos. Requiere idempotencia del consumidor (tabla de `eventId` procesados) y que `vehiculos` publique eventos. |
-| clientes-09 | **Adaptador SOAP de precalificación (RFC-12).** `BcraSoapSituacionAdapter` que consume el WSDL del servicio `precalificacion`. | Segunda | Solo infraestructura; los specs del change 05 no cambian salvo `fuente` = `BCRA`. |
+| clientes-09 | **Adaptador SOAP de precalificación (RFC-12).** `BcraSoapSituacionAdapter` que consume el WSDL del servicio `precalificacion`. Configura los timeouts de conexión y de lectura de su cliente HTTP con `clientes.situacion-crediticia.timeout` y extiende `ContratoFuenteSituacionTest` (contrato del puerto del change 05). Suma también la precarga de la caché después de un alta con CUIL, si con la fuente real hace falta. | Segunda | Solo infraestructura; los specs del change 05 no cambian salvo `fuente` = `BCRA`. |
 | clientes-10 | **Outbox.** Reemplazar la publicación AFTER_COMMIT por tabla outbox y relay. | Integrador | Alineado con AD-07. |
 | clientes-11 | **Auditoría de accesos al CUIL.** Registrar quién y cuándo usó el CUIL (consultas a la fuente, búsquedas por CUIL). | Integrador | Depende de la autenticación. |
 | clientes-12 | **Fusión de duplicados.** Resolver los clientes marcados con `requiereRevision`: unir fichas, notas y preferencias, y publicar `ClientesFusionados`. | Post-TP | Útil en producción; costoso para el TP. |
 | clientes-13 | **Etiquetas y segmentos** (referido, recompra, flota). | Post-TP | Base para campañas. |
 | clientes-14 | **Exportación de datos del titular** (derecho de acceso, Ley 25.326). | Post-TP | Simple una vez que existe la ficha completa. |
-| clientes-15 | **Privacidad ampliada** (diferido del change 04). `PUT /clientes/{id}/cuil` (registrar o corregir el CUIL, invalidando la situación crediticia), `POST /clientes/busqueda-por-cuil` (CUIL en el cuerpo), `GET/POST/DELETE /clientes/{id}/consentimientos` (otorgar y revocar; revocar precalificación borra el CUIL), finalidad `CONTACTO_COMERCIAL` (la necesita el 07) y `email_alternativo` para el email descartado en una coincidencia por CUIL. | Segunda | Aditivo: el modelo de datos del 04 ya lo soporta, sin migrar datos. La revocación conviene sumarla con el 05, cuando tiene efecto observable. |
+| clientes-15 | **Privacidad ampliada** (diferido del change 04). `PUT /clientes/{id}/cuil` (registrar o corregir el CUIL, invalidando la situación crediticia), `POST /clientes/busqueda-por-cuil` (CUIL en el cuerpo), `GET/POST/DELETE /clientes/{id}/consentimientos` (otorgar y revocar; revocar precalificación borra el CUIL y la situación crediticia guardada), finalidad `CONTACTO_COMERCIAL` (la necesita el 07) y `email_alternativo` para el email descartado en una coincidencia por CUIL. | Segunda | Aditivo: el modelo de datos del 04 ya lo soporta, sin migrar datos. La revocación conviene sumarla con el 05, cuando tiene efecto observable. El 05 no la incluyó: `PUT /cuil` y la revocación tienen que borrar la caché de situación crediticia, y la revocación agrega la rama `SIN_CONSENTIMIENTO` del servicio con su escenario. |
 
 ---
 

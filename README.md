@@ -23,6 +23,7 @@ Variables obligatorias (sin ellas el servicio no arranca, a propósito):
 | --- | --- |
 | `CLIENTES_CUIL_CLAVE`, `CLIENTES_CUIL_HMAC` | Cifrado e índice ciego del CUIL (32 bytes en base64). **No se pueden cambiar** una vez que hay datos: con otra `CLIENTES_CUIL_CLAVE` los CUIL guardados quedan ilegibles y con otra `CLIENTES_CUIL_HMAC` la deduplicación por CUIL deja de encontrarlos. La rotación de claves no está implementada. |
 | `CLIENTES_CLAVE_LEADS` | Clave de servicio que `leads` manda en `X-Api-Key` para dar de alta clientes. Mínimo 32 caracteres; la misma clave se configura en `leads`. Ejemplo: `openssl rand -base64 32`. |
+| `CLIENTES_CLAVE_CALIFICACION` | Clave de servicio que `calificacion` manda en `X-Api-Key` para consultar la situación crediticia. Mínimo 32 caracteres y distinta de `CLIENTES_CLAVE_LEADS`; la misma clave se configura en `calificacion`. |
 
 Para desarrollo sin Docker del servicio: `mvn -pl clientes-service -am spring-boot:run` con el perfil `local`
 (usa PostgreSQL y Kafka de `infra/docker-compose.yml` y claves ficticias).
@@ -48,6 +49,7 @@ A través del gateway las rutas se exponen como `/api/clientes/**`.
 | `PUT` | `/clientes/{id}/no-contactar` | Front (personal del negocio) | `204` · `404` · `410` |
 | `DELETE` | `/clientes/{id}/no-contactar` | Front (personal del negocio) | `204` · `404` · `410` |
 | `POST` | `/clientes/{id}/anonimizacion` | Front (personal del negocio), con el email como confirmación | `204` · `404` · `422` |
+| `GET` | `/clientes/{id}/situacion-crediticia` | Solo `calificacion` (con su `X-Api-Key`) | `200` con `estado` · `401` · `404` · `410` |
 
 Las escrituras del personal no piden `X-Api-Key` (no hay autenticación de usuarios en la Primera Parte). Aceptan
 el header opcional `X-Usuario` (por ejemplo `tm-ana`), que queda en los logs junto al `correlationId`.
@@ -147,6 +149,28 @@ Content-Type: application/json
 **Gateway (CORS).** Si el front llama desde otro origen, el gateway tiene que exponer `ETag`
 (`Access-Control-Expose-Headers`) y permitir `If-Match` y `X-Usuario` (`Access-Control-Allow-Headers`). Sin eso el
 navegador no deja leer la versión y la edición no funciona.
+
+### Contrato para `calificacion`: situación crediticia
+
+```http
+GET /clientes/{id}/situacion-crediticia
+X-Api-Key: <CLIENTES_CLAVE_CALIFICACION>
+```
+
+```json
+{ "clienteId": "a1b2...", "estado": "CON_DATOS", "situacion": 1, "periodo": "202609",
+  "fuente": "SIMULADA", "consultadaEn": "2026-10-10T13:02:45.123456Z" }
+```
+
+- `estado`: `CON_DATOS` (con `situacion` de 1 a 6), `SIN_REGISTROS`, `SIN_CUIL`, `NO_DISPONIBLE` o
+  `SIN_CONSENTIMIENTO` (reservado, hoy no se produce). Enum `EstadoSituacionCrediticia` en `contracts`. Los campos que
+  no aplican van en `null`; nunca incluye el CUIL.
+- Siempre `200` para un cliente activo, aunque la fuente falle: si no responde en `clientes.situacion-crediticia.timeout`
+  (2 s) o el circuit breaker está abierto, `NO_DISPONIBLE`. El cliente de `calificacion` tiene que esperar más de 2 s.
+- Los resultados de la fuente se guardan 30 días por cliente (`clientes.situacion-crediticia.vigencia`). En la Primera
+  Parte la fuente es simulada (`modo: simulado`): el último dígito del DNI decide el resultado (0–4 → 1, 5–6 → 2,
+  7 → 3, 8 → 5, 9 → sin registros). Por ejemplo, `20-12345678-6` da situación 5.
+- Detalle para el equipo en `docs/contrato-equipo/clientes-05-para-contratos-backend.md`.
 
 ### Eventos que publica `clientes` (para `leads`)
 

@@ -19,7 +19,9 @@ public class OpenApiConfig {
                         .type(SecurityScheme.Type.APIKEY)
                         .in(SecurityScheme.In.HEADER)
                         .name(ClaveServicioInterceptor.HEADER)
-                        .description("Clave de servicio para los endpoints internos de escritura (la usa leads).")))
+                        .description("Clave de servicio, una por consumidor: la de leads para el alta y la de "
+                                + "calificacion para la situación crediticia. La de un servicio no abre los "
+                                + "endpoints del otro.")))
                 .info(new Info()
                 .title("Servicio de Clientes")
                 .version(version)

@@ -44,6 +44,7 @@ class AltaClienteServiceTest {
 
     @BeforeEach
     void limpiar() {
+        jdbc.update("DELETE FROM situacion_crediticia");
         jdbc.update("DELETE FROM consentimiento");
         jdbc.update("DELETE FROM cliente");
     }

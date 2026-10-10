@@ -52,6 +52,7 @@ class AnonimizacionApiTest {
 
     @BeforeEach
     void limpiar() {
+        jdbc.update("DELETE FROM situacion_crediticia");
         jdbc.update("DELETE FROM consentimiento");
         jdbc.update("DELETE FROM cliente");
     }
@@ -113,6 +114,42 @@ class AnonimizacionApiTest {
         assertThat(jdbc.queryForObject(
                 "SELECT count(*) FROM consentimiento WHERE cliente_id = ? AND revocado_en IS NULL", Integer.class, id))
                 .isZero();
+    }
+
+    /** Change 05: "Situación crediticia eliminada". */
+    @Test
+    void anonimizarBorraLaSituacionCrediticiaGuardada() throws Exception {
+        UUID id = alta(AltaConCuilApiTest.cuerpo("martina@gmail.com", null, "20-12345678-6", true));
+        consultarSituacion(id).andExpect(status().isOk());
+        assertThat(situacionesGuardadas(id)).isEqualTo(1);
+
+        anonimizar(id, "martina@gmail.com").andExpect(status().isNoContent());
+
+        assertThat(situacionesGuardadas(id)).isZero();
+    }
+
+    /** Design D9 del change 05: si no se puede borrar la situación crediticia, la anonimización completa se revierte. */
+    @Test
+    void siFallaElBorradoDeLaSituacionLaAnonimizacionSeRevierte() throws Exception {
+        UUID id = alta(AltaConCuilApiTest.cuerpo("martina@gmail.com", null, "20-12345678-6", true));
+        consultarSituacion(id).andExpect(status().isOk());
+        jdbc.execute("""
+                CREATE FUNCTION prueba_impedir_borrado() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN RAISE EXCEPTION 'borrado impedido por el test'; END $$""");
+        jdbc.execute("CREATE TRIGGER prueba_impedir_borrado BEFORE DELETE ON situacion_crediticia "
+                + "FOR EACH ROW EXECUTE FUNCTION prueba_impedir_borrado()");
+        try {
+            anonimizar(id, "martina@gmail.com").andExpect(status().isInternalServerError());
+        } finally {
+            jdbc.execute("DROP TRIGGER prueba_impedir_borrado ON situacion_crediticia");
+            jdbc.execute("DROP FUNCTION prueba_impedir_borrado()");
+        }
+
+        assertThat(jdbc.queryForObject("SELECT estado FROM cliente WHERE id = ?", String.class, id)).isEqualTo("ACTIVO");
+        assertThat(jdbc.queryForObject("SELECT cuil_hash IS NOT NULL FROM cliente WHERE id = ?", Boolean.class, id))
+                .isTrue();
+        assertThat(situacionesGuardadas(id)).isEqualTo(1);
+        assertThat(mensajes.ninguno("cliente-anonimizado", id)).isEmpty();
     }
 
     @Test
@@ -238,6 +275,15 @@ class AnonimizacionApiTest {
     private ResultActions anonimizar(UUID id, String email) throws Exception {
         return mvc.perform(post("/clientes/{id}/anonimizacion", id).contentType(MediaType.APPLICATION_JSON)
                 .content(json.writeValueAsString(Map.of("email", email))));
+    }
+
+    private ResultActions consultarSituacion(UUID id) throws Exception {
+        return mvc.perform(get("/clientes/{id}/situacion-crediticia", id)
+                .header("X-Api-Key", SituacionCrediticiaApiTest.CLAVE_CALIFICACION));
+    }
+
+    private int situacionesGuardadas(UUID id) {
+        return jdbc.queryForObject("SELECT count(*) FROM situacion_crediticia WHERE cliente_id = ?", Integer.class, id);
     }
 
     private UUID alta(String cuerpo) throws Exception {

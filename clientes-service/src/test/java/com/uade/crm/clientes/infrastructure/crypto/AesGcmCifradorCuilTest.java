@@ -1,6 +1,7 @@
 package com.uade.crm.clientes.infrastructure.crypto;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import com.uade.crm.clientes.domain.valor.Cuil;
 import com.uade.crm.clientes.domain.valor.CuilProtegido;
@@ -12,12 +13,13 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 
-/** Tarea 4.2 del seed: ida y vuelta, IV distinto en cada cifrado y hash estable. */
+/** Tarea 4.2 del seed: ida y vuelta, IV distinto en cada cifrado y hash estable; descifrado del change 05. */
 class AesGcmCifradorCuilTest {
 
     private static final String CLAVE_CIFRADO = "c29sby10ZXN0LWNsYXZlLWNpZnJhZG8tY3VpbC0zMmI=";
     private static final String CLAVE_HASH = "c29sby10ZXN0LWNsYXZlLWhtYWMtZGVsLWN1aWwtMzJi";
     private static final String OTRA_CLAVE_HASH = "b3RyYS1jbGF2ZS1obWFjLWRlbC1jdWlsLTMyYnl0ZXM=";
+    private static final String OTRA_CLAVE_CIFRADO = "b3RyYS1jbGF2ZS1jaWZyYWRvLWN1aWwtMzJieXRlcyE=";
 
     private final AesGcmCifradorCuil cifrador = new AesGcmCifradorCuil(CLAVE_CIFRADO, CLAVE_HASH);
     private final Cuil cuil = Cuil.de("20-12345678-6");
@@ -25,6 +27,29 @@ class AesGcmCifradorCuilTest {
     @Test
     void idaYVuelta() throws Exception {
         assertThat(descifrar(cifrador.proteger(cuil).cifrado())).isEqualTo("20123456786");
+    }
+
+    @Test
+    void protegerYDescifrar() {
+        assertThat(cifrador.descifrar(cifrador.proteger(cuil))).isEqualTo(cuil);
+    }
+
+    @Test
+    void rechazaUnCifradoAlterado() {
+        CuilProtegido protegido = cifrador.proteger(cuil);
+        byte[] alterado = protegido.cifrado();
+        alterado[alterado.length - 1] ^= 1;
+        CuilProtegido falso = new CuilProtegido(alterado, protegido.hash(), protegido.ultimos4());
+
+        assertThatIllegalStateException().isThrownBy(() -> cifrador.descifrar(falso))
+                .withMessageNotContaining("20123456786");
+    }
+
+    @Test
+    void rechazaDescifrarConOtraClave() {
+        AesGcmCifradorCuil otro = new AesGcmCifradorCuil(OTRA_CLAVE_CIFRADO, CLAVE_HASH);
+
+        assertThatIllegalStateException().isThrownBy(() -> otro.descifrar(cifrador.proteger(cuil)));
     }
 
     @Test

@@ -23,8 +23,9 @@ import org.springframework.test.web.servlet.MockMvc;
 @ExtendWith(OutputCaptureExtension.class)
 class ClaveServicioTest {
 
-    /** La de application-test.yml. */
+    /** Las de application-test.yml. */
     private static final String CLAVE = "solo-test-clave-de-servicio-leads-0001";
+    private static final String CLAVE_CALIFICACION = "solo-test-clave-de-servicio-calificacion-0001";
     private static final String VALIDO = "{ \"nombre\": \"Martina\" }";
 
     @Autowired
@@ -60,6 +61,36 @@ class ClaveServicioTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{ \"nombre\": \"M\" }"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.codigo").value("VALIDACION"));
+    }
+
+    @Test
+    void laClaveDeCalificacionNoAbreUnEndpointDeLeads() throws Exception {
+        mvc.perform(post("/pruebas/interno").header("X-Api-Key", CLAVE_CALIFICACION)
+                        .contentType(MediaType.APPLICATION_JSON).content(VALIDO))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.codigo").value("CLAVE_SERVICIO_INVALIDA"));
+    }
+
+    @Test
+    void conLaClaveDeCalificacionSeProcesaSuEndpoint() throws Exception {
+        mvc.perform(get("/pruebas/calificacion").header("X-Api-Key", CLAVE_CALIFICACION))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void laClaveDeLeadsNoAbreUnEndpointDeCalificacion() throws Exception {
+        mvc.perform(get("/pruebas/calificacion").header("X-Api-Key", CLAVE))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.codigo").value("CLAVE_SERVICIO_INVALIDA"));
+        mvc.perform(get("/pruebas/calificacion"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void laClaveDeCalificacionNoApareceEnLosLogs(CapturedOutput salida) throws Exception {
+        mvc.perform(get("/pruebas/calificacion").header("X-Api-Key", CLAVE_CALIFICACION));
+
+        assertThat(salida.getAll()).doesNotContain(CLAVE_CALIFICACION);
     }
 
     @Test

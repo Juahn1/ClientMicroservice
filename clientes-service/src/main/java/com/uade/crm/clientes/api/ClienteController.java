@@ -7,6 +7,7 @@ import com.uade.crm.clientes.api.dto.ClienteResponse;
 import com.uade.crm.clientes.api.dto.ClienteResumenResponse;
 import com.uade.crm.clientes.api.dto.EdicionClienteRequest;
 import com.uade.crm.clientes.api.dto.PaginaResponse;
+import com.uade.crm.clientes.api.seguridad.Consumidor;
 import com.uade.crm.clientes.api.seguridad.RequiereClaveServicio;
 import com.uade.crm.clientes.application.AltaClienteService;
 import com.uade.crm.clientes.application.AnonimizacionClienteService;
@@ -67,7 +68,7 @@ public class ClienteController {
     }
 
     @PostMapping
-    @RequiereClaveServicio
+    @RequiereClaveServicio(Consumidor.LEADS)
     @SecurityRequirement(name = "claveServicio")
     @Operation(summary = "Alta de cliente con deduplicación por CUIL y por email",
             description = "Solo para servicios internos (leads). `cuil` y `consentimiento: true` van juntos, solo "

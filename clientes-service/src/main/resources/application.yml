@@ -48,6 +48,7 @@ springdoc:
 clientes:
   seguridad:
     clave-leads: ${CLIENTES_CLAVE_LEADS}   # mínimo 32 caracteres; ej. openssl rand -base64 32
+    clave-calificacion: ${CLIENTES_CLAVE_CALIFICACION}   # mínimo 32 caracteres y distinta de la de leads
   telefono:
     region-por-defecto: AR
   cuil:
@@ -76,10 +77,14 @@ clientes:
   errores:
     tipo-base: https://crm.uade.local/errores/
 
+# Circuit breaker de la fuente de situación crediticia (design D5 del change 05). El timeout no va acá: lo impone
+# cada fuente con clientes.situacion-crediticia.timeout.
 resilience4j:
   circuitbreaker:
     instances:
       situacionCrediticia:
         sliding-window-size: 10
+        minimum-number-of-calls: 10            # por defecto son 100, más que la ventana: el circuito no se abriría
         failure-rate-threshold: 50
         wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 1

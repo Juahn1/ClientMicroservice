@@ -1,6 +1,7 @@
 package com.uade.crm.pruebas;
 
 import com.uade.crm.clientes.api.PrecondicionRequeridaException;
+import com.uade.crm.clientes.api.seguridad.Consumidor;
 import com.uade.crm.clientes.api.seguridad.RequiereClaveServicio;
 import com.uade.crm.clientes.application.ConfirmacionInvalidaException;
 import com.uade.crm.clientes.application.EmailEnUsoException;
@@ -47,12 +48,19 @@ public class PruebaController {
         return alta;
     }
 
-    /** Endpoint interno de prueba para {@link RequiereClaveServicio}. */
-    @RequiereClaveServicio
+    /** Endpoint interno de prueba para {@link RequiereClaveServicio} con la clave de leads. */
+    @RequiereClaveServicio(Consumidor.LEADS)
     @PostMapping("/pruebas/interno")
     AltaPrueba interno(@Valid @RequestBody AltaPrueba alta) {
         log.info("Alta interna recibida");
         return alta;
+    }
+
+    /** Endpoint interno de prueba para {@link RequiereClaveServicio} con la clave de calificacion. */
+    @RequiereClaveServicio(Consumidor.CALIFICACION)
+    @GetMapping("/pruebas/calificacion")
+    void calificacion() {
+        log.info("Consulta de calificacion recibida");
     }
 
     @PostMapping("/clientes/falla")

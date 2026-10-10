@@ -51,6 +51,23 @@ public class AesGcmCifradorCuil implements CifradorCuil {
         return new CuilProtegido(cifrar(texto), hash(texto), cuil.ultimos4());
     }
 
+    /** El mensaje de error no incluye el texto cifrado ni el CUIL. */
+    @Override
+    public Cuil descifrar(CuilProtegido protegido) {
+        byte[] ivYCifrado = protegido.cifrado();
+        if (ivYCifrado.length <= BYTES_IV) {
+            throw new IllegalStateException("El CUIL cifrado es demasiado corto");
+        }
+        try {
+            Cipher descifrador = Cipher.getInstance(TRANSFORMACION);
+            descifrador.init(Cipher.DECRYPT_MODE, claveCifrado, new GCMParameterSpec(BITS_TAG, ivYCifrado, 0, BYTES_IV));
+            byte[] texto = descifrador.doFinal(ivYCifrado, BYTES_IV, ivYCifrado.length - BYTES_IV);
+            return Cuil.de(new String(texto, StandardCharsets.US_ASCII));
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("No se pudo descifrar el CUIL (¿texto alterado o clave distinta?)", e);
+        }
+    }
+
     private byte[] cifrar(byte[] texto) {
         byte[] iv = new byte[BYTES_IV];
         aleatorio.nextBytes(iv);

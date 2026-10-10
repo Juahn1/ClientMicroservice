@@ -54,6 +54,7 @@ class AltaClienteApiTest {
 
     @BeforeEach
     void limpiar() {
+        jdbc.update("DELETE FROM situacion_crediticia");
         jdbc.update("DELETE FROM consentimiento");
         jdbc.update("DELETE FROM cliente");
     }
@@ -229,6 +230,16 @@ class AltaClienteApiTest {
                         .content("{ \"nombre\": \"Martina\", \"apellido\": \"López\", \"provincia\": \"CORDOBA\" }"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.codigo").value("CLAVE_SERVICIO_INVALIDA"));
+    }
+
+    @Test
+    void altaConLaClaveDeCalificacion() throws Exception {
+        mvc.perform(post("/clientes").header("X-Api-Key", "solo-test-clave-de-servicio-calificacion-0001")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(martina("martina@gmail.com", null, null)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.codigo").value("CLAVE_SERVICIO_INVALIDA"));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM cliente", Integer.class)).isZero();
     }
 
     @Test

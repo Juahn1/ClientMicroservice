@@ -29,36 +29,41 @@ public record ClientesProperties(
         @Valid @NotNull Errores errores) {
 
     /**
-     * Clave que presenta {@code leads} en {@code X-Api-Key} para los endpoints internos de escritura (design D2).
-     * Se exige un largo mínimo para que un placeholder sin resolver ({@code ${CLIENTES_CLAVE_LEADS}}) no deje
-     * el endpoint protegido por una clave conocida.
+     * Claves que presentan los servicios en {@code X-Api-Key}, una por consumidor (design D2 del change 02 y D7 del
+     * change 05): {@code leads} para el alta y {@code calificacion} para la situación crediticia. Se exige un largo
+     * mínimo para que un placeholder sin resolver ({@code ${CLIENTES_CLAVE_LEADS}}) no deje el endpoint protegido por
+     * una clave conocida, y que sean distintas para que la clave de un servicio no abra los endpoints del otro.
      */
-    public record Seguridad(@NotBlank String claveLeads) {
+    public record Seguridad(@NotBlank String claveLeads, @NotBlank String claveCalificacion) {
 
         public static final int LARGO_MINIMO = 32;
 
         public Seguridad {
-            exigirClave(claveLeads);
+            exigirClave(claveLeads, "clientes.seguridad.clave-leads", "CLIENTES_CLAVE_LEADS");
+            exigirClave(claveCalificacion, "clientes.seguridad.clave-calificacion", "CLIENTES_CLAVE_CALIFICACION");
+            if (claveLeads != null && claveLeads.equals(claveCalificacion)) {
+                throw new IllegalArgumentException(
+                        "clientes.seguridad.clave-leads y clientes.seguridad.clave-calificacion deben ser distintas");
+            }
         }
 
-        private static void exigirClave(String clave) {
+        private static void exigirClave(String clave, String propiedad, String variable) {
             if (clave == null || clave.isBlank()) {
                 return;
             }
             if (clave.startsWith("${")) {
                 throw new IllegalArgumentException(
-                        "clientes.seguridad.clave-leads no está resuelta (¿falta la variable de entorno CLIENTES_CLAVE_LEADS?)");
+                        propiedad + " no está resuelta (¿falta la variable de entorno " + variable + "?)");
             }
             if (clave.length() < LARGO_MINIMO) {
-                throw new IllegalArgumentException("clientes.seguridad.clave-leads debe tener al menos "
-                        + LARGO_MINIMO + " caracteres y tiene " + clave.length()
-                        + " (¿falta la variable de entorno CLIENTES_CLAVE_LEADS?)");
+                throw new IllegalArgumentException(propiedad + " debe tener al menos " + LARGO_MINIMO
+                        + " caracteres y tiene " + clave.length() + " (¿falta la variable de entorno " + variable + "?)");
             }
         }
 
         @Override
         public String toString() {
-            return "Seguridad[claveLeads=****]";
+            return "Seguridad[claveLeads=****, claveCalificacion=****]";
         }
     }
 
