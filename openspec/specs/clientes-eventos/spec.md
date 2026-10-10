@@ -9,6 +9,7 @@ Eventos de integración que publica el servicio clientes para que otros servicio
 ### Requirement: Publicación de ClienteActualizado
 Cuando una edición o la marca no contactar modifican al menos un campo del cliente, el servicio MUST publicar `ClienteActualizado` en el tópico `cliente-actualizado` con clave `clienteId`, después de confirmar la transacción.
 El payload MUST indicar los nombres de los campos modificados: `NOMBRE`, `APELLIDO`, `EMAIL`, `TELEFONO`, `PROVINCIA`, `LOCALIDAD` o `NO_CONTACTAR`.
+Los cambios de teléfono alternativo, de la marca de revisión, del CUIL y de los consentimientos MUST NOT publicar eventos.
 
 #### Scenario: Cambio de nombre y email
 - **WHEN** un `PATCH /clientes/{id}` modifica nombre y email
@@ -31,8 +32,16 @@ El payload MUST indicar los nombres de los campos modificados: `NOMBRE`, `APELLI
 - **THEN** no se publica ningún evento
 
 #### Scenario: Recontacto
-- **WHEN** un `POST /clientes` coincide con un cliente existente, aunque le quite la marca no contactar
+- **WHEN** un `POST /clientes` coincide con un cliente existente, aunque le quite la marca no contactar, le registre el CUIL o lo marque para revisión
 - **THEN** no se publica ningún evento
+
+#### Scenario: Edición de datos que no copia leads
+- **WHEN** un `PATCH /clientes/{id}` modifica solo el teléfono alternativo o resuelve la marca de revisión
+- **THEN** responde 200 con un `ETag` nuevo y no se publica ningún evento
+
+#### Scenario: Edición mixta
+- **WHEN** un `PATCH /clientes/{id}` modifica el apellido y el teléfono alternativo
+- **THEN** se publica `ClienteActualizado` con `campos` = [`APELLIDO`]
 
 ### Requirement: Publicación de ClienteAnonimizado
 Al anonimizar un cliente activo, el servicio MUST publicar `ClienteAnonimizado` en el tópico `cliente-anonimizado` con clave `clienteId`, después de confirmar la transacción.
