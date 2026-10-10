@@ -1,13 +1,18 @@
 package com.uade.crm.clientes.infrastructure.persistence;
 
 import com.uade.crm.clientes.domain.model.Cliente;
+import com.uade.crm.clientes.domain.model.Consentimiento;
 import com.uade.crm.clientes.domain.model.EstadoCliente;
+import com.uade.crm.clientes.domain.model.MotivoRevision;
 import com.uade.crm.clientes.domain.model.Pagina;
 import com.uade.crm.clientes.domain.port.ClienteRepositorio;
-import com.uade.crm.clientes.domain.port.EmailDuplicadoException;
+import com.uade.crm.clientes.domain.port.ClaveDuplicadaException;
+import com.uade.crm.clientes.domain.port.ClaveDuplicadaException.Clave;
 import com.uade.crm.clientes.domain.port.FiltroBusqueda;
+import com.uade.crm.clientes.domain.valor.CuilProtegido;
 import com.uade.crm.clientes.domain.valor.Email;
 import com.uade.crm.clientes.domain.valor.Telefono;
+import java.util.ArrayList;
 import java.util.Optional;
 import java.util.UUID;
 import org.hibernate.exception.ConstraintViolationException;
@@ -22,6 +27,7 @@ import org.springframework.stereotype.Repository;
 class ClienteRepositorioJpa implements ClienteRepositorio {
 
     static final String INDICE_EMAIL = "ux_cliente_email_activo";
+    static final String INDICE_CUIL = "ux_cliente_cuil_activo";
 
     private final ClienteJpaRepository jpa;
 
@@ -37,6 +43,11 @@ class ClienteRepositorioJpa implements ClienteRepositorio {
     @Override
     public Optional<Cliente> buscarActivoPorEmailParaActualizar(Email email) {
         return jpa.findParaActualizar(email.valor(), EstadoCliente.ACTIVO).map(ClienteRepositorioJpa::aDominio);
+    }
+
+    @Override
+    public Optional<Cliente> buscarActivoPorCuilParaActualizar(String cuilHash) {
+        return jpa.findPorCuilParaActualizar(cuilHash, EstadoCliente.ACTIVO).map(ClienteRepositorioJpa::aDominio);
     }
 
     @Override
@@ -64,29 +75,33 @@ class ClienteRepositorioJpa implements ClienteRepositorio {
     }
 
     /**
-     * {@code saveAndFlush} para que la violación del índice único aparezca acá y no al commit. Solo la violación de
-     * {@value #INDICE_EMAIL} se traduce a {@link EmailDuplicadoException}; las demás siguen siendo inesperadas.
+     * {@code saveAndFlush} para que la violación del índice único aparezca acá y no al commit. Solo las violaciones
+     * de {@value #INDICE_EMAIL} y {@value #INDICE_CUIL} se traducen a {@link ClaveDuplicadaException}; las demás
+     * siguen siendo inesperadas.
      */
     @Override
     public Cliente guardar(Cliente cliente) {
         try {
             return aDominio(jpa.saveAndFlush(aEntidad(cliente)));
         } catch (DataIntegrityViolationException violacion) {
-            if (violaIndiceEmail(violacion)) {
-                throw new EmailDuplicadoException(violacion);
+            if (violaIndice(violacion, INDICE_EMAIL)) {
+                throw new ClaveDuplicadaException(Clave.EMAIL, violacion);
+            }
+            if (violaIndice(violacion, INDICE_CUIL)) {
+                throw new ClaveDuplicadaException(Clave.CUIL, violacion);
             }
             throw violacion;
         }
     }
 
     /** Hibernate informa el nombre de la restricción; si no lo extrajo, se busca en el mensaje del driver. */
-    static boolean violaIndiceEmail(DataIntegrityViolationException violacion) {
+    static boolean violaIndice(DataIntegrityViolationException violacion, String indice) {
         for (Throwable causa = violacion; causa != null; causa = causa.getCause()) {
             if (causa instanceof ConstraintViolationException restriccion
-                    && INDICE_EMAIL.equalsIgnoreCase(restriccion.getConstraintName())) {
+                    && indice.equalsIgnoreCase(restriccion.getConstraintName())) {
                 return true;
             }
-            if (causa.getMessage() != null && causa.getMessage().contains(INDICE_EMAIL)) {
+            if (causa.getMessage() != null && causa.getMessage().contains(indice)) {
                 return true;
             }
         }
@@ -111,7 +126,13 @@ class ClienteRepositorioJpa implements ClienteRepositorio {
         e.setNoContactar(c.noContactar());
         e.setNoContactarDesde(c.noContactarDesde().orElse(null));
         e.setRequiereRevision(c.requiereRevision());
-        e.setMotivoRevision(c.motivoRevision().orElse(null));
+        e.setMotivoRevision(c.motivoRevision().map(Enum::name).orElse(null));
+        CuilProtegido cuil = c.cuil().orElse(null);
+        e.setCuilCifrado(cuil == null ? null : cuil.cifrado());
+        e.setCuilHash(cuil == null ? null : cuil.hash());
+        e.setCuilUltimos4(cuil == null ? null : cuil.ultimos4());
+        e.setConsentimientos(
+                new ArrayList<>(c.consentimientos().stream().map(ClienteRepositorioJpa::aEntidad).toList()));
         e.setEstado(c.estado());
         e.setVersion(c.version().orElse(null));
         e.setCreadoEn(c.creadoEn());
@@ -138,12 +159,25 @@ class ClienteRepositorioJpa implements ClienteRepositorio {
                 .noContactar(e.isNoContactar())
                 .noContactarDesde(e.getNoContactarDesde())
                 .requiereRevision(e.isRequiereRevision())
-                .motivoRevision(e.getMotivoRevision())
+                .motivoRevision(e.getMotivoRevision() == null ? null : MotivoRevision.valueOf(e.getMotivoRevision()))
+                .cuil(e.getCuilHash() == null ? null
+                        : new CuilProtegido(e.getCuilCifrado(), e.getCuilHash(), e.getCuilUltimos4()))
+                .consentimientos(e.getConsentimientos().stream().map(ClienteRepositorioJpa::aDominio).toList())
                 .estado(e.getEstado())
                 .version(e.getVersion())
                 .creadoEn(e.getCreadoEn())
                 .actualizadoEn(e.getActualizadoEn())
                 .anonimizadoEn(e.getAnonimizadoEn())
                 .build();
+    }
+
+    static ConsentimientoEntity aEntidad(Consentimiento c) {
+        return new ConsentimientoEntity(c.id(), c.finalidad(), c.versionTexto(), c.origen(), c.otorgadoEn(),
+                c.revocadoEn().orElse(null));
+    }
+
+    static Consentimiento aDominio(ConsentimientoEntity e) {
+        return new Consentimiento(e.getId(), e.getFinalidad(), e.getVersionTexto(), e.getOrigen(), e.getOtorgadoEn(),
+                e.getRevocadoEn());
     }
 }

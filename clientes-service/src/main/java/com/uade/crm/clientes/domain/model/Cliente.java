@@ -1,5 +1,6 @@
 package com.uade.crm.clientes.domain.model;
 
+import com.uade.crm.clientes.domain.valor.CuilProtegido;
 import com.uade.crm.clientes.domain.valor.Email;
 import com.uade.crm.clientes.domain.valor.NombreBusqueda;
 import com.uade.crm.clientes.domain.valor.Telefono;
@@ -7,7 +8,10 @@ import com.uade.crm.contracts.CanalOrigen;
 import com.uade.crm.contracts.Provincia;
 import com.uade.crm.contracts.clientes.CampoCliente;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -38,8 +42,10 @@ public class Cliente {
     private Instant ultimoContactoEn;
     private boolean noContactar;
     private Instant noContactarDesde;
-    private final boolean requiereRevision;
-    private final String motivoRevision;
+    private boolean requiereRevision;
+    private MotivoRevision motivoRevision;
+    private CuilProtegido cuil;
+    private final List<Consentimiento> consentimientos;
     private EstadoCliente estado;
     private final Long version;
     private final Instant creadoEn;
@@ -72,8 +78,17 @@ public class Cliente {
         }
         this.noContactar = b.noContactar;
         this.noContactarDesde = b.noContactarDesde;
+        if (b.motivoRevision != null && !b.requiereRevision) {
+            throw new IllegalArgumentException("motivoRevision se informa solo si el cliente requiere revisión");
+        }
         this.requiereRevision = b.requiereRevision;
         this.motivoRevision = b.motivoRevision;
+        this.cuil = b.cuil;
+        this.consentimientos = new ArrayList<>(b.consentimientos);
+        if ((cuil != null) != tieneConsentimientoVigente(FinalidadConsentimiento.PRECALIFICACION_CREDITICIA)) {
+            throw new IllegalArgumentException(
+                    "Un cliente tiene CUIL si y solo si tiene vigente el consentimiento de precalificación");
+        }
         this.version = b.version;
         this.creadoEn = Objects.requireNonNull(b.creadoEn, "creadoEn");
         this.actualizadoEn = Objects.requireNonNull(b.actualizadoEn, "actualizadoEn");
@@ -110,12 +125,27 @@ public class Cliente {
     }
 
     /**
-     * Edición por parte del personal (design D2 del change 03): aplica los valores informados y devuelve los campos
-     * que realmente cambiaron, vacío si no hubo cambios. Los valores llegan normalizados, así que el mismo email o
-     * teléfono en otro formato no cuenta como cambio. Un null no modifica.
+     * Edición por parte del personal (design D2 del change 03 y D7 del change 04): aplica los valores informados y
+     * devuelve si algo cambió y qué campos publicables cambiaron. Los valores llegan normalizados, así que el mismo
+     * email o teléfono en otro formato no cuenta como cambio. Un null no modifica. Un teléfono alternativo igual al
+     * principal (el actual o el que llega en la misma edición) se rechaza sin modificar nada.
      */
-    public Set<CampoCliente> editar(CambiosCliente cambios, Instant ahora) {
+    public ResultadoEdicion editar(CambiosCliente cambios, Instant ahora) {
         exigirActivo("editarse");
+        Telefono principal = cambios.telefono() != null ? cambios.telefono() : telefono;
+        if (cambios.telefonoAlternativo() != null && cambios.telefonoAlternativo().equals(principal)) {
+            throw new DatoInvalidoException("telefonoAlternativo", "no puede ser igual al teléfono principal");
+        }
+        boolean otrosCambios = false;
+        if (cambios.telefonoAlternativo() != null && !cambios.telefonoAlternativo().equals(telefonoAlternativo)) {
+            telefonoAlternativo = cambios.telefonoAlternativo();
+            otrosCambios = true;
+        }
+        if (cambios.resolverRevision() && requiereRevision) {
+            requiereRevision = false;
+            motivoRevision = null;
+            otrosCambios = true;
+        }
         Set<CampoCliente> modificados = EnumSet.noneOf(CampoCliente.class);
         if (cambios.nombre() != null && !cambios.nombre().equals(nombre)) {
             nombre = cambios.nombre();
@@ -144,10 +174,54 @@ public class Cliente {
         if (modificados.contains(CampoCliente.NOMBRE) || modificados.contains(CampoCliente.APELLIDO)) {
             nombreBusqueda = NombreBusqueda.de(nombre, apellido);
         }
-        if (!modificados.isEmpty()) {
+        boolean huboCambios = otrosCambios || !modificados.isEmpty();
+        if (huboCambios) {
             actualizadoEn = ahora;
         }
-        return modificados;
+        return new ResultadoEdicion(huboCambios, modificados);
+    }
+
+    /**
+     * Registra el CUIL junto con el consentimiento de precalificación que lo habilita (design D3 del change 04). Solo
+     * para un cliente sin CUIL: reemplazarlo no es parte de este change. Si ya hubiera un consentimiento vigente de
+     * esa finalidad, se conserva el original.
+     */
+    public void registrarCuil(CuilProtegido nuevo, String versionTexto, Instant ahora) {
+        exigirActivo("registrar un CUIL");
+        Objects.requireNonNull(nuevo, "cuil");
+        if (cuil != null) {
+            throw new IllegalStateException("El cliente ya tiene CUIL");
+        }
+        cuil = nuevo;
+        if (!tieneConsentimientoVigente(FinalidadConsentimiento.PRECALIFICACION_CREDITICIA)) {
+            consentimientos.add(Consentimiento.otorgar(FinalidadConsentimiento.PRECALIFICACION_CREDITICIA,
+                    versionTexto, OrigenConsentimiento.PREFORMULARIO, ahora));
+        }
+        actualizadoEn = ahora;
+    }
+
+    /** Marca al cliente para revisión. Si ya estaba marcado conserva el primer motivo y devuelve false. */
+    public boolean marcarRevision(MotivoRevision motivo, Instant ahora) {
+        exigirActivo("marcarse para revisión");
+        if (requiereRevision) {
+            return false;
+        }
+        requiereRevision = true;
+        motivoRevision = Objects.requireNonNull(motivo, "motivo");
+        actualizadoEn = ahora;
+        return true;
+    }
+
+    /** El personal resolvió la revisión. Devuelve false si el cliente no estaba marcado. */
+    public boolean resolverRevision(Instant ahora) {
+        exigirActivo("resolver una revisión");
+        if (!requiereRevision) {
+            return false;
+        }
+        requiereRevision = false;
+        motivoRevision = null;
+        actualizadoEn = ahora;
+        return true;
     }
 
     /** El cliente pidió que no lo contacten más (design D5 del change 03). Devuelve false si ya tenía la marca. */
@@ -176,8 +250,9 @@ public class Cliente {
 
     /**
      * Baja por derecho de supresión (Ley 25.326, design D6 del change 03): elimina los datos personales y conserva
-     * el id, la provincia, los canales, el contador, las fechas y la marca no contactar. Devuelve false si ya estaba
-     * anonimizado.
+     * el id, la provincia, los canales, el contador, las fechas y la marca no contactar. El CUIL se elimina y los
+     * consentimientos vigentes se revocan; sus filas quedan como constancia de la base legal, sin datos personales
+     * (change 04). Devuelve false si ya estaba anonimizado.
      */
     public boolean anonimizar(Instant ahora) {
         if (estado == EstadoCliente.ANONIMIZADO) {
@@ -190,6 +265,8 @@ public class Cliente {
         telefono = null;
         telefonoAlternativo = null;
         localidad = null;
+        cuil = null;
+        consentimientos.forEach(c -> c.revocar(ahora));
         estado = EstadoCliente.ANONIMIZADO;
         anonimizadoEn = ahora;
         actualizadoEn = ahora;
@@ -200,6 +277,10 @@ public class Cliente {
         if (estado != EstadoCliente.ACTIVO) {
             throw new IllegalStateException("Solo un cliente activo puede " + operacion);
         }
+    }
+
+    private boolean tieneConsentimientoVigente(FinalidadConsentimiento finalidad) {
+        return consentimientos.stream().anyMatch(c -> c.vigente() && c.finalidad() == finalidad);
     }
 
     /** Un teléfono distinto del principal se guarda como alternativo solo si no había otro. */
@@ -279,8 +360,21 @@ public class Cliente {
         return requiereRevision;
     }
 
-    public Optional<String> motivoRevision() {
+    public Optional<MotivoRevision> motivoRevision() {
         return Optional.ofNullable(motivoRevision);
+    }
+
+    public Optional<CuilProtegido> cuil() {
+        return Optional.ofNullable(cuil);
+    }
+
+    /** Todos los consentimientos, vigentes y revocados, en el orden en que se otorgaron. */
+    public List<Consentimiento> consentimientos() {
+        return Collections.unmodifiableList(consentimientos);
+    }
+
+    public List<Consentimiento> consentimientosVigentes() {
+        return consentimientos.stream().filter(Consentimiento::vigente).toList();
     }
 
     public EstadoCliente estado() {
@@ -331,7 +425,9 @@ public class Cliente {
         private boolean noContactar;
         private Instant noContactarDesde;
         private boolean requiereRevision;
-        private String motivoRevision;
+        private MotivoRevision motivoRevision;
+        private CuilProtegido cuil;
+        private List<Consentimiento> consentimientos = List.of();
         private EstadoCliente estado = EstadoCliente.ACTIVO;
         private Long version;
         private Instant creadoEn;
@@ -416,8 +512,18 @@ public class Cliente {
             return this;
         }
 
-        public Builder motivoRevision(String motivoRevision) {
+        public Builder motivoRevision(MotivoRevision motivoRevision) {
             this.motivoRevision = motivoRevision;
+            return this;
+        }
+
+        public Builder cuil(CuilProtegido cuil) {
+            this.cuil = cuil;
+            return this;
+        }
+
+        public Builder consentimientos(List<Consentimiento> consentimientos) {
+            this.consentimientos = List.copyOf(consentimientos);
             return this;
         }
 

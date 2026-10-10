@@ -9,6 +9,7 @@ import com.uade.crm.clientes.domain.ClienteFactory;
 import com.uade.crm.clientes.domain.model.CambiosCliente;
 import com.uade.crm.contracts.Provincia;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.AssertFalse;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
@@ -38,7 +39,16 @@ public record EdicionClienteRequest(
 
         @Schema(example = "San Isidro")
         @Size(max = 120)
-        String localidad) {
+        String localidad,
+
+        @Schema(description = "Se normaliza como el teléfono; no puede ser igual al principal.",
+                example = "11 8765-4321")
+        @Size(max = 30)
+        String telefonoAlternativo,
+
+        @Schema(description = "Solo false: resuelve la marca de revisión que puso un alta. Marcar a mano no se permite.")
+        @AssertFalse(message = "solo se puede enviar false para resolver la revisión")
+        Boolean requiereRevision) {
 
     /** Se recorta antes de validar, y un texto en blanco cuenta como ausente (no falla el patrón de nombre). */
     public EdicionClienteRequest {
@@ -47,6 +57,7 @@ public record EdicionClienteRequest(
         email = normalizar(email);
         telefono = normalizar(telefono);
         localidad = normalizar(localidad);
+        telefonoAlternativo = normalizar(telefonoAlternativo);
     }
 
     private static String normalizar(String texto) {
@@ -54,6 +65,7 @@ public record EdicionClienteRequest(
     }
 
     public CambiosCliente aCambios(ClienteFactory factory) {
-        return factory.cambios(nombre, apellido, email, telefono, provincia, localidad);
+        return factory.cambios(nombre, apellido, email, telefono, provincia, localidad, telefonoAlternativo,
+                Boolean.FALSE.equals(requiereRevision));
     }
 }

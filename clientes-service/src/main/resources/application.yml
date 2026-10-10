@@ -53,6 +53,8 @@ clientes:
   cuil:
     clave-cifrado: ${CLIENTES_CUIL_CLAVE}
     clave-hash: ${CLIENTES_CUIL_HMAC}
+  consentimiento:
+    version-texto: v1         # versión del texto legal que acepta el titular en el preformulario
   situacion-crediticia:
     modo: simulado            # simulado | bcra (Segunda Parte)
     vigencia: 30d

@@ -4,6 +4,7 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -19,6 +20,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -43,6 +45,7 @@ class BusquedaClientesApiTest {
 
     @BeforeEach
     void limpiar() {
+        jdbc.update("DELETE FROM consentimiento");
         jdbc.update("DELETE FROM cliente");
     }
 
@@ -121,6 +124,20 @@ class BusquedaClientesApiTest {
         mvc.perform(get("/clientes").param("size", "0"))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.errores[*].campo", hasItem("size")));
+    }
+
+    @Test
+    void cuilFueraDeLaBusqueda() throws Exception {
+        mvc.perform(post("/clientes").header("X-Api-Key", AltaClienteApiTest.CLAVE)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(AltaConCuilApiTest.cuerpo("martina@gmail.com", null, "20-12345678-6", true)))
+                .andExpect(status().isCreated());
+
+        mvc.perform(get("/clientes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElementos").value(1))
+                .andExpect(jsonPath("$.contenido[0].cuil").doesNotExist())
+                .andExpect(jsonPath("$.contenido[0].consentimientosVigentes").doesNotExist());
     }
 
     @Test

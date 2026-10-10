@@ -4,8 +4,9 @@ import com.uade.crm.clientes.domain.model.CambiosCliente;
 import com.uade.crm.clientes.domain.model.Cliente;
 import com.uade.crm.clientes.domain.model.ClienteAnonimizadoException;
 import com.uade.crm.clientes.domain.model.ClienteNoEncontradoException;
+import com.uade.crm.clientes.domain.model.ResultadoEdicion;
 import com.uade.crm.clientes.domain.port.ClienteRepositorio;
-import com.uade.crm.clientes.domain.port.EmailDuplicadoException;
+import com.uade.crm.clientes.domain.port.ClaveDuplicadaException;
 import com.uade.crm.contracts.clientes.CampoCliente;
 import java.time.Clock;
 import java.util.Set;
@@ -48,13 +49,16 @@ public class EdicionClienteService {
             throw new VersionDesactualizadaException(id);
         }
         exigirEmailLibre(cliente, cambios);
-        Set<CampoCliente> campos = cliente.editar(cambios, reloj.instant());
-        if (campos.isEmpty()) {
+        ResultadoEdicion resultado = cliente.editar(cambios, reloj.instant());
+        if (!resultado.huboCambios()) {
             return cliente;
         }
         Cliente guardado = guardar(cliente);
-        eventos.publishEvent(EventosCliente.actualizado(id, campos, cliente.actualizadoEn()));
-        log.info("Edición del cliente {}: {}", id, campos);
+        Set<CampoCliente> campos = resultado.camposPublicables();
+        if (!campos.isEmpty()) {
+            eventos.publishEvent(EventosCliente.actualizado(id, campos, cliente.actualizadoEn()));
+        }
+        log.info("Edición del cliente {}: {}", id, campos.isEmpty() ? "sin campos publicables" : campos);
         return guardado;
     }
 
@@ -73,8 +77,11 @@ public class EdicionClienteService {
     private Cliente guardar(Cliente cliente) {
         try {
             return repositorio.guardar(cliente);
-        } catch (EmailDuplicadoException carrera) {
-            throw new EmailEnUsoException(cliente.id());
+        } catch (ClaveDuplicadaException carrera) {
+            if (carrera.clave() == ClaveDuplicadaException.Clave.EMAIL) {
+                throw new EmailEnUsoException(cliente.id());
+            }
+            throw carrera;
         } catch (OptimisticLockingFailureException carrera) {
             throw new VersionDesactualizadaException(cliente.id());
         }

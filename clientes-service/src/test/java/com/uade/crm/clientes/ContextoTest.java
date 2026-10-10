@@ -64,7 +64,7 @@ class ContextoTest {
         }
         assertThat(flyway.info().applied())
                 .extracting(migracion -> migracion.getScript())
-                .containsExactly("V1__cliente.sql", "V2__no_contactar.sql");
+                .containsExactly("V1__cliente.sql", "V2__no_contactar.sql", "V3__cuil_y_consentimiento.sql");
     }
 
     @Test
@@ -77,7 +77,7 @@ class ContextoTest {
                 indices.add(consulta.getString(1));
             }
             assertThat(indices).contains("ux_cliente_email_activo", "ix_cliente_telefono_activo",
-                    "ix_cliente_provincia", "ix_cliente_ultimo_contacto");
+                    "ix_cliente_provincia", "ix_cliente_ultimo_contacto", "ux_cliente_cuil_activo");
         }
     }
 
@@ -89,6 +89,18 @@ class ContextoTest {
                 .andExpect(jsonPath("$.info.title").value("Servicio de Clientes"));
         mvc.perform(get("/swagger-ui.html"))
                 .andExpect(status().is3xxRedirection());
+    }
+
+    /** Tarea 4.4 del change 04: el contrato del alta documenta el CUIL y el consentimiento. */
+    @Test
+    void elContratoDelAltaIncluyeCuilYConsentimiento() throws Exception {
+        mvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.components.schemas.AltaClienteRequest.properties.cuil").exists())
+                .andExpect(jsonPath("$.components.schemas.AltaClienteRequest.properties.consentimiento.type")
+                        .value("boolean"))
+                .andExpect(jsonPath("$.components.schemas.AltaClienteResponse.properties.coincidencia.enum",
+                        org.hamcrest.Matchers.hasItem("CUIL")));
     }
 
     @Test

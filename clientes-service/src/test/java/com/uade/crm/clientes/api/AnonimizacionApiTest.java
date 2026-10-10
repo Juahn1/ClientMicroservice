@@ -52,6 +52,7 @@ class AnonimizacionApiTest {
 
     @BeforeEach
     void limpiar() {
+        jdbc.update("DELETE FROM consentimiento");
         jdbc.update("DELETE FROM cliente");
     }
 
@@ -94,6 +95,24 @@ class AnonimizacionApiTest {
         assertThat(fila.values()).map(String::valueOf)
                 .noneMatch(valor -> valor.contains("Martina") || valor.contains("López") || valor.contains("martina")
                         || valor.contains("1112345678") || valor.contains("Lanús"));
+    }
+
+    /** Change 04: "Datos conservados y eliminados" con CUIL y "Consentimientos revocados". */
+    @Test
+    void anonimizarBorraElCuilYRevocaLosConsentimientos() throws Exception {
+        UUID id = alta(AltaConCuilApiTest.cuerpo("martina@gmail.com", null, "20-12345678-6", true));
+
+        anonimizar(id, "martina@gmail.com").andExpect(status().isNoContent());
+
+        Map<String, Object> fila = jdbc.queryForMap("SELECT * FROM cliente WHERE id = ?", id);
+        assertThat(fila.get("cuil_cifrado")).isNull();
+        assertThat(fila.get("cuil_hash")).isNull();
+        assertThat(fila.get("cuil_ultimos4")).isNull();
+        Map<String, Object> consentimiento = jdbc.queryForMap("SELECT * FROM consentimiento WHERE cliente_id = ?", id);
+        assertThat(consentimiento.get("revocado_en")).isEqualTo(fila.get("anonimizado_en"));
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM consentimiento WHERE cliente_id = ? AND revocado_en IS NULL", Integer.class, id))
+                .isZero();
     }
 
     @Test

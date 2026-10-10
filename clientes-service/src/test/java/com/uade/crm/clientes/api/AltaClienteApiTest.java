@@ -54,6 +54,7 @@ class AltaClienteApiTest {
 
     @BeforeEach
     void limpiar() {
+        jdbc.update("DELETE FROM consentimiento");
         jdbc.update("DELETE FROM cliente");
     }
 

@@ -2,6 +2,7 @@ package com.uade.crm.clientes.domain.valor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
@@ -15,6 +16,11 @@ class EnmascaradorTest {
     })
     void cuil(String cuil, String esperado) {
         assertThat(Enmascarador.cuil(cuil)).isEqualTo(esperado);
+    }
+
+    @Test
+    void cuilDesdeUltimos4() {
+        assertThat(Enmascarador.cuilDesdeUltimos4("5678")).isEqualTo("XX-XXXX5678-X");
     }
 
     @ParameterizedTest

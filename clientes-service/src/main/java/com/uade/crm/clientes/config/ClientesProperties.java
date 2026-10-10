@@ -5,6 +5,7 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.util.Base64;
@@ -20,6 +21,7 @@ public record ClientesProperties(
         @Valid @NotNull Seguridad seguridad,
         @Valid @NotNull Telefono telefono,
         @Valid @NotNull Cuil cuil,
+        @Valid @NotNull Consentimiento consentimiento,
         @Valid @NotNull SituacionCrediticia situacionCrediticia,
         @Valid @NotNull Interesados interesados,
         @Valid @NotNull Paginacion paginacion,
@@ -96,6 +98,10 @@ public record ClientesProperties(
         public String toString() {
             return "Cuil[claves=****]";
         }
+    }
+
+    /** Versión del texto legal del consentimiento que se registra en cada alta con CUIL (design D4 del change 04). */
+    public record Consentimiento(@NotBlank @Size(max = 20) String versionTexto) {
     }
 
     public record SituacionCrediticia(

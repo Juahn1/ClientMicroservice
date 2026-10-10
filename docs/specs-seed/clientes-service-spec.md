@@ -454,6 +454,13 @@ Content-Type: application/problem+json
 
 ### 5.7 Algoritmo de alta con deduplicación
 
+> **Nota (change 04, 2026-10-09):** la deduplicación base es por **email**, no por teléfono (change 02), así que el
+> orden implementado es **CUIL → email**. Coincidencia por CUIL: recontacto de ese cliente aunque el email sea otro
+> (el email informado se descarta; si pertenece a otro cliente activo, se marca `POSIBLE_DUPLICADO`). Coincidencia
+> por email con otro CUIL: no se toca el CUIL ni se registra el consentimiento, y se marca `CUIL_DISTINTO`. Se
+> conserva el primer motivo de revisión. El paso 5 ya no responde a un endpoint público: solo `leads` llama al alta.
+> Ver `openspec/specs/clientes-privacidad` y el design del change 04.
+
 1. Normalizar el teléfono y, si viene, validar el CUIL. Si viene CUIL sin consentimiento `PRECALIFICACION_CREDITICIA`, responder 422.
 2. Si viene CUIL y existe un cliente `ACTIVO` con ese `cuil_hash`: coincidencia por **CUIL**. Si el teléfono informado es distinto del registrado, guardarlo en `telefono_alternativo` (no se pisa el principal).
 3. Si no, si existe un cliente `ACTIVO` con ese teléfono: coincidencia por **TELEFONO**. Si viene CUIL y el cliente no tiene, se registra. Si el cliente ya tiene otro CUIL, no se modifica y se marca `requiere_revision = true` con motivo `CUIL_DISTINTO` (puede ser un familiar que usa el mismo teléfono; lo resuelve el telemarketer).
@@ -941,6 +948,15 @@ y MUST NOT incluir nombre, teléfono, email ni CUIL.
 
 ### 6.4 `clientes-04-cuil-y-consentimientos`
 
+> **Nota (change 04, 2026-10-09):** implementado con alcance "MVP+" acordado contra `contratos-backend.md` v1.1:
+> entra lo caro de cambiar después (cifrado AES-GCM, índice ciego HMAC, tabla `consentimiento`, forma del request
+> con `leads`) y los endpoints aditivos pasan al backlog (§8, "privacidad ampliada"). Diferencias con el texto de
+> abajo: migración `V3__cuil_y_consentimiento.sql` (no V2); el CUIL y el consentimiento llegan solo por
+> `POST /clientes` desde `leads` (no por el front, AC-01 no se adoptó) con `consentimiento: true` booleano; solo la
+> finalidad `PRECALIFICACION_CREDITICIA`; deduplicación CUIL → email (§5.7); no hay `PUT /clientes/{id}/cuil`,
+> `POST /clientes/busqueda-por-cuil` ni `POST/DELETE .../consentimientos`; la anonimización revoca (no borra) los
+> consentimientos; el PATCH suma `telefonoAlternativo` y `requiereRevision: false`. Ver el change archivado.
+
 **proposal.md**
 
 ````markdown
@@ -1395,6 +1411,7 @@ Combinados con los casos de la sección 6.3 del documento de arquitectura (preci
 | clientes-12 | **Fusión de duplicados.** Resolver los clientes marcados con `requiereRevision`: unir fichas, notas y preferencias, y publicar `ClientesFusionados`. | Post-TP | Útil en producción; costoso para el TP. |
 | clientes-13 | **Etiquetas y segmentos** (referido, recompra, flota). | Post-TP | Base para campañas. |
 | clientes-14 | **Exportación de datos del titular** (derecho de acceso, Ley 25.326). | Post-TP | Simple una vez que existe la ficha completa. |
+| clientes-15 | **Privacidad ampliada** (diferido del change 04). `PUT /clientes/{id}/cuil` (registrar o corregir el CUIL, invalidando la situación crediticia), `POST /clientes/busqueda-por-cuil` (CUIL en el cuerpo), `GET/POST/DELETE /clientes/{id}/consentimientos` (otorgar y revocar; revocar precalificación borra el CUIL), finalidad `CONTACTO_COMERCIAL` (la necesita el 07) y `email_alternativo` para el email descartado en una coincidencia por CUIL. | Segunda | Aditivo: el modelo de datos del 04 ya lo soporta, sin migrar datos. La revocación conviene sumarla con el 05, cuando tiene efecto observable. |
 
 ---
 

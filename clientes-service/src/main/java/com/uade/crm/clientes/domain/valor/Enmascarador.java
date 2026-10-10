@@ -23,7 +23,12 @@ public final class Enmascarador {
         if (digitos.length() != 11) {
             return "XX-XXXXXXXX-X";
         }
-        return "XX-XXXX" + digitos.substring(6, 10) + "-X";
+        return cuilDesdeUltimos4(digitos.substring(6, 10));
+    }
+
+    /** {@code 5678} → {@code XX-XXXX5678-X}: la ficha enmascara desde los últimos 4 guardados, sin descifrar. */
+    public static String cuilDesdeUltimos4(String ultimos4) {
+        return "XX-XXXX" + ultimos4 + "-X";
     }
 
     /** {@code +5491112345678} → {@code +54911****5678}; otros formatos conservan solo los últimos 4 dígitos. */

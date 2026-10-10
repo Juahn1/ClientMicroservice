@@ -69,13 +69,17 @@ public class ClienteController {
     @PostMapping
     @RequiereClaveServicio
     @SecurityRequirement(name = "claveServicio")
-    @Operation(summary = "Alta de cliente con deduplicación por email",
-            description = "Solo para servicios internos (leads). Si ya existe un cliente activo con el mismo email, "
-                    + "responde 200 con ese cliente y no modifica su nombre, apellido ni provincia.")
+    @Operation(summary = "Alta de cliente con deduplicación por CUIL y por email",
+            description = "Solo para servicios internos (leads). `cuil` y `consentimiento: true` van juntos, solo "
+                    + "cuando el prospecto pidió financiación. Si el CUIL pertenece a un cliente activo responde 200 "
+                    + "con `coincidencia` = CUIL, aunque el email sea otro; si no, si el email pertenece a uno, "
+                    + "200 con `coincidencia` = EMAIL. Un recontacto no modifica nombre, apellido, provincia, email "
+                    + "ni un CUIL ya registrado.")
     @ApiResponse(responseCode = "201", description = "Cliente nuevo")
-    @ApiResponse(responseCode = "200", description = "El email ya pertenecía a un cliente activo")
+    @ApiResponse(responseCode = "200", description = "El CUIL o el email ya pertenecían a un cliente activo")
     @ApiResponse(responseCode = "401", description = "Falta X-Api-Key o no es válida")
-    @ApiResponse(responseCode = "422", description = "Datos inválidos (VALIDACION o TELEFONO_INVALIDO)")
+    @ApiResponse(responseCode = "422", description = "Datos inválidos (VALIDACION, TELEFONO_INVALIDO, CUIL_INVALIDO "
+            + "o CONSENTIMIENTO_REQUERIDO)")
     public ResponseEntity<AltaClienteResponse> alta(@Valid @RequestBody AltaClienteRequest request) {
         ResultadoAlta resultado = alta.registrar(request.aSolicitud(factory));
         return ResponseEntity.status(resultado.nuevo() ? HttpStatus.CREATED : HttpStatus.OK)

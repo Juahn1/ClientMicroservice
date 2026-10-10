@@ -8,10 +8,13 @@ import com.uade.crm.clientes.application.ConfirmacionInvalidaException;
 import com.uade.crm.clientes.application.EmailEnUsoException;
 import com.uade.crm.clientes.application.VersionDesactualizadaException;
 import com.uade.crm.clientes.config.ClientesProperties;
+import com.uade.crm.clientes.domain.valor.CuilInvalidoException;
 import com.uade.crm.clientes.domain.valor.TelefonoInvalidoException;
 import com.uade.crm.clientes.config.CorrelationIdFilter;
 import com.uade.crm.clientes.domain.model.ClienteAnonimizadoException;
 import com.uade.crm.clientes.domain.model.ClienteNoEncontradoException;
+import com.uade.crm.clientes.domain.model.ConsentimientoRequeridoException;
+import com.uade.crm.clientes.domain.model.DatoInvalidoException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.util.Arrays;
@@ -99,6 +102,25 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(TelefonoInvalidoException.class)
     ResponseEntity<Object> telefonoInvalido(TelefonoInvalidoException ex, NativeWebRequest request) {
         return conErrorDeCampo(problema(CodigoError.TELEFONO_INVALIDO, ex.getMessage(), request), "telefono",
+                ex.getMessage());
+    }
+
+    @ExceptionHandler(CuilInvalidoException.class)
+    ResponseEntity<Object> cuilInvalido(CuilInvalidoException ex, NativeWebRequest request) {
+        return conErrorDeCampo(problema(CodigoError.CUIL_INVALIDO, ex.getMessage(), request), "cuil",
+                ex.getMessage());
+    }
+
+    @ExceptionHandler(ConsentimientoRequeridoException.class)
+    ResponseEntity<Object> consentimientoRequerido(ConsentimientoRequeridoException ex, NativeWebRequest request) {
+        return conErrorDeCampo(problema(CodigoError.CONSENTIMIENTO_REQUERIDO, ex.getMessage(), request),
+                "consentimiento", ex.getMessage());
+    }
+
+    /** Regla del dominio sobre un campo que Bean Validation no puede expresar (design D4 del change 04). */
+    @ExceptionHandler(DatoInvalidoException.class)
+    ResponseEntity<Object> datoInvalido(DatoInvalidoException ex, NativeWebRequest request) {
+        return conErrorDeCampo(problema(CodigoError.VALIDACION, "Datos inválidos", request), ex.campo(),
                 ex.getMessage());
     }
 

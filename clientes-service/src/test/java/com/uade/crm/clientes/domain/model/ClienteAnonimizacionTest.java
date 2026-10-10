@@ -2,6 +2,7 @@ package com.uade.crm.clientes.domain.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.uade.crm.clientes.CuilDePrueba;
 import com.uade.crm.contracts.CanalOrigen;
 import com.uade.crm.contracts.Provincia;
 import java.time.Instant;
@@ -16,6 +17,7 @@ class ClienteAnonimizacionTest {
     @Test
     void datosConservadosYEliminados() {
         Cliente martina = ClienteEdicionTest.martina();
+        martina.registrarCuil(CuilDePrueba.protegido("20-12345678-6"), "v1", BAJA.minusSeconds(3600));
         martina.marcarNoContactar(BAJA);
         var id = martina.id();
         var creadoEn = martina.creadoEn();
@@ -30,6 +32,10 @@ class ClienteAnonimizacionTest {
         assertThat(martina.telefono()).isEmpty();
         assertThat(martina.telefonoAlternativo()).isEmpty();
         assertThat(martina.localidad()).isEmpty();
+        assertThat(martina.cuil()).isEmpty();
+        assertThat(martina.consentimientosVigentes()).isEmpty();
+        assertThat(martina.consentimientos()).singleElement()
+                .satisfies(c -> assertThat(c.revocadoEn()).contains(BAJA));
         assertThat(martina.anonimizadoEn()).contains(BAJA);
 
         assertThat(martina.id()).isEqualTo(id);

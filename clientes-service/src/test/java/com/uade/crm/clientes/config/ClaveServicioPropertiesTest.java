@@ -24,6 +24,7 @@ class ClaveServicioPropertiesTest {
                     "clientes.telefono.region-por-defecto=AR",
                     "clientes.cuil.clave-cifrado=c29sby10ZXN0LWNsYXZlLWNpZnJhZG8tY3VpbC0zMmI=",
                     "clientes.cuil.clave-hash=c29sby10ZXN0LWNsYXZlLWhtYWMtZGVsLWN1aWwtMzJi",
+                    "clientes.consentimiento.version-texto=v1",
                     "clientes.situacion-crediticia.modo=simulado",
                     "clientes.situacion-crediticia.vigencia=30d",
                     "clientes.situacion-crediticia.timeout=2s",

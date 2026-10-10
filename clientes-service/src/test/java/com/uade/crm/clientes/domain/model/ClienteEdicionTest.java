@@ -2,7 +2,9 @@ package com.uade.crm.clientes.domain.model;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.uade.crm.clientes.CuilDePrueba;
 import com.uade.crm.clientes.domain.ClienteFactory;
 import com.uade.crm.clientes.domain.valor.Email;
 import com.uade.crm.clientes.domain.valor.Telefono;
@@ -20,7 +22,7 @@ class ClienteEdicionTest {
     private static final Instant ALTA = Instant.parse("2026-10-01T10:00:00Z");
     private static final Instant EDICION = Instant.parse("2026-10-08T12:00:00Z");
 
-    private final ClienteFactory factory = new ClienteFactory("AR", Clock.systemUTC());
+    private final ClienteFactory factory = CuilDePrueba.factory(Clock.systemUTC());
 
     @Test
     void cambiaElApellidoYRecalculaElNombreDeBusqueda() {
@@ -28,7 +30,7 @@ class ClienteEdicionTest {
 
         var campos = martina.editar(factory.cambios(null, "Gómez", null, null, null, null), EDICION);
 
-        assertThat(campos).containsExactly(CampoCliente.APELLIDO);
+        assertThat(campos.camposPublicables()).containsExactly(CampoCliente.APELLIDO);
         assertThat(martina.apellido()).isEqualTo("Gómez");
         assertThat(martina.nombre()).isEqualTo("Martina");
         assertThat(martina.nombreBusqueda().valor()).isEqualTo("martina gomez");
@@ -41,7 +43,8 @@ class ClienteEdicionTest {
 
         var campos = martina.editar(factory.cambios(null, "  ", "", " ", null, ""), EDICION);
 
-        assertThat(campos).isEmpty();
+        assertThat(campos.huboCambios()).isFalse();
+        assertThat(campos.camposPublicables()).isEmpty();
         assertThat(martina.apellido()).isEqualTo("López");
         assertThat(martina.email()).isEqualTo(Email.de("martina@gmail.com"));
         assertThat(martina.telefono()).contains(Telefono.deE164("+5491112345678"));
@@ -56,7 +59,8 @@ class ClienteEdicionTest {
         var campos = martina.editar(factory.cambios("Martina", "López", " MARTINA@gmail.com ", "11 1234-5678",
                 Provincia.BUENOS_AIRES, "San Isidro"), EDICION);
 
-        assertThat(campos).isEmpty();
+        assertThat(campos.huboCambios()).isFalse();
+        assertThat(campos.camposPublicables()).isEmpty();
         assertThat(martina.actualizadoEn()).isEqualTo(ALTA);
     }
 
@@ -67,7 +71,7 @@ class ClienteEdicionTest {
         var campos = martina.editar(factory.cambios("Martu", "Gómez", "martu@gmail.com", "0351 15 412-3456",
                 Provincia.CORDOBA, "Villa Carlos Paz"), EDICION);
 
-        assertThat(campos).containsExactly(CampoCliente.NOMBRE, CampoCliente.APELLIDO, CampoCliente.EMAIL,
+        assertThat(campos.camposPublicables()).containsExactly(CampoCliente.NOMBRE, CampoCliente.APELLIDO, CampoCliente.EMAIL,
                 CampoCliente.TELEFONO, CampoCliente.PROVINCIA, CampoCliente.LOCALIDAD);
         assertThat(martina.email()).isEqualTo(Email.de("martu@gmail.com"));
         assertThat(martina.telefono()).contains(Telefono.deE164("+5493514123456"));
@@ -83,7 +87,52 @@ class ClienteEdicionTest {
                 () -> martina.editar(factory.cambios("Martu", null, null, null, null, null), EDICION));
     }
 
+    @Test
+    void telefonoAlternativoYResolucionDeRevisionCambianLaFichaSinCamposPublicables() {
+        Cliente martina = martinaBuilder().requiereRevision(true).motivoRevision(MotivoRevision.CUIL_DISTINTO).build();
+
+        var resultado = martina.editar(
+                factory.cambios(null, null, null, null, null, null, "11 2222-3333", true), EDICION);
+
+        assertThat(resultado.huboCambios()).isTrue();
+        assertThat(resultado.camposPublicables()).isEmpty();
+        assertThat(martina.telefonoAlternativo()).contains(Telefono.deE164("+5491122223333"));
+        assertThat(martina.requiereRevision()).isFalse();
+        assertThat(martina.motivoRevision()).isEmpty();
+        assertThat(martina.actualizadoEn()).isEqualTo(EDICION);
+    }
+
+    @Test
+    void resolverSinRevisionPendienteNoEsUnCambio() {
+        Cliente martina = martina();
+
+        var resultado = martina.editar(factory.cambios(null, null, null, null, null, null, null, true), EDICION);
+
+        assertThat(resultado.huboCambios()).isFalse();
+        assertThat(martina.actualizadoEn()).isEqualTo(ALTA);
+    }
+
+    @Test
+    void elAlternativoNoPuedeSerIgualAlPrincipalActualNiAlNuevo() {
+        Cliente martina = martina();
+
+        assertThatThrownBy(() -> martina.editar(
+                factory.cambios(null, null, null, null, null, null, "11 1234-5678", false), EDICION))
+                .isInstanceOfSatisfying(DatoInvalidoException.class,
+                        e -> assertThat(e.campo()).isEqualTo("telefonoAlternativo"));
+        assertThatThrownBy(() -> martina.editar(
+                factory.cambios("Martu", null, null, "0351 15 412-3456", null, null, "351 412-3456", false),
+                EDICION))
+                .isInstanceOf(DatoInvalidoException.class);
+        assertThat(martina.nombre()).isEqualTo("Martina");
+        assertThat(martina.telefonoAlternativo()).contains(Telefono.deE164("+5491187654321"));
+    }
+
     static Cliente martina() {
+        return martinaBuilder().build();
+    }
+
+    static Cliente.Builder martinaBuilder() {
         return Cliente.builder()
                 .id(UUID.randomUUID())
                 .nombre("Martina").apellido("López")
@@ -95,7 +144,6 @@ class ClienteEdicionTest {
                 .canalOrigen(CanalOrigen.INSTAGRAM).ultimoCanal(CanalOrigen.WHATSAPP)
                 .contactosRegistrados(3)
                 .version(5L)
-                .ultimoContactoEn(ALTA).creadoEn(ALTA).actualizadoEn(ALTA)
-                .build();
+                .ultimoContactoEn(ALTA).creadoEn(ALTA).actualizadoEn(ALTA);
     }
 }

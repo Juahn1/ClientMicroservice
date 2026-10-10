@@ -35,6 +35,7 @@ class FichaClienteApiTest {
 
     @BeforeEach
     void limpiar() {
+        jdbc.update("DELETE FROM consentimiento");
         jdbc.update("DELETE FROM cliente");
     }
 
@@ -57,7 +58,40 @@ class FichaClienteApiTest {
                 .andExpect(jsonPath("$.ultimoCanal").value("INSTAGRAM"))
                 .andExpect(jsonPath("$.contactosRegistrados").value(1))
                 .andExpect(jsonPath("$.ultimoContactoEn").isString())
-                .andExpect(jsonPath("$.requiereRevision").value(false));
+                .andExpect(jsonPath("$.noContactar").value(false))
+                .andExpect(jsonPath("$.noContactarDesde").value(nullValue()))
+                .andExpect(jsonPath("$.cuil").value(nullValue()))
+                .andExpect(jsonPath("$.consentimientosVigentes").isEmpty())
+                .andExpect(jsonPath("$.requiereRevision").value(false))
+                .andExpect(jsonPath("$.motivoRevision").value(nullValue()));
+    }
+
+    /** Escenarios "CUIL en la ficha" y "Consentimiento en la ficha" de clientes-privacidad. */
+    @Test
+    void cuilEnmascaradoYConsentimientoEnLaFicha() throws Exception {
+        UUID id = alta(AltaConCuilApiTest.cuerpo("martina@gmail.com", null, "20-12345678-6", true));
+
+        String ficha = mvc.perform(get("/clientes/{id}", id))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cuil").value("XX-XXXX5678-X"))
+                .andExpect(jsonPath("$.consentimientosVigentes.length()").value(1))
+                .andExpect(jsonPath("$.consentimientosVigentes[0].finalidad").value("PRECALIFICACION_CREDITICIA"))
+                .andExpect(jsonPath("$.consentimientosVigentes[0].versionTexto").value("v1"))
+                .andExpect(jsonPath("$.consentimientosVigentes[0].otorgadoEn").isString())
+                .andReturn().getResponse().getContentAsString();
+        assertThat(ficha).doesNotContain("20123456786", "12345678");
+    }
+
+    /** Escenario "Cliente sin revisión pendiente" y forma de una revisión pendiente. */
+    @Test
+    void motivoDeRevisionEnLaFicha() throws Exception {
+        UUID id = alta(AltaConCuilApiTest.cuerpo("martina@gmail.com", null, "27-30111222-5", true));
+        alta(AltaConCuilApiTest.cuerpo("martina@gmail.com", null, "20-12345678-6", true));
+
+        mvc.perform(get("/clientes/{id}", id))
+                .andExpect(jsonPath("$.cuil").value("XX-XXXX1222-X"))
+                .andExpect(jsonPath("$.requiereRevision").value(true))
+                .andExpect(jsonPath("$.motivoRevision").value("CUIL_DISTINTO"));
     }
 
     @Test

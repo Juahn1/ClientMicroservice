@@ -21,7 +21,7 @@ Variables obligatorias (sin ellas el servicio no arranca, a propósito):
 
 | Variable | Para qué |
 | --- | --- |
-| `CLIENTES_CUIL_CLAVE`, `CLIENTES_CUIL_HMAC` | Cifrado e índice ciego del CUIL (32 bytes en base64). |
+| `CLIENTES_CUIL_CLAVE`, `CLIENTES_CUIL_HMAC` | Cifrado e índice ciego del CUIL (32 bytes en base64). **No se pueden cambiar** una vez que hay datos: con otra `CLIENTES_CUIL_CLAVE` los CUIL guardados quedan ilegibles y con otra `CLIENTES_CUIL_HMAC` la deduplicación por CUIL deja de encontrarlos. La rotación de claves no está implementada. |
 | `CLIENTES_CLAVE_LEADS` | Clave de servicio que `leads` manda en `X-Api-Key` para dar de alta clientes. Mínimo 32 caracteres; la misma clave se configura en `leads`. Ejemplo: `openssl rand -base64 32`. |
 
 Para desarrollo sin Docker del servicio: `mvn -pl clientes-service -am spring-boot:run` con el perfil `local`
@@ -41,7 +41,7 @@ A través del gateway las rutas se exponen como `/api/clientes/**`.
 
 | Método | Ruta | Quién lo usa | Respuestas |
 | --- | --- | --- | --- |
-| `POST` | `/clientes` | Solo `leads` (con `X-Api-Key`) | `201` nuevo · `200` ya existía · `401` · `422` |
+| `POST` | `/clientes` | Solo `leads` (con `X-Api-Key`) | `201` nuevo · `200` ya existía (por CUIL o por email) · `401` · `422` |
 | `GET` | `/clientes/{id}` | Front, otros servicios | `200` con `ETag` · `404` · `410` anonimizado |
 | `GET` | `/clientes?telefono=&email=&q=&provincia=&page=&size=` | Front, otros servicios | `200` · `422` |
 | `PATCH` | `/clientes/{id}` | Front (personal del negocio), con `If-Match` | `200` con `ETag` · `404` · `409` · `410` · `412` · `422` · `428` |
@@ -69,12 +69,14 @@ Content-Type: application/json
   "telefono": "11 1234-5678",     // opcional; se normaliza a móvil argentino E.164
   "provincia": "BUENOS_AIRES",    // obligatoria, enum Provincia (sale de la ubicación del preformulario)
   "localidad": "San Isidro",      // opcional
-  "canalOrigen": "INSTAGRAM"      // opcional, enum CanalOrigen
+  "canalOrigen": "INSTAGRAM",     // opcional, enum CanalOrigen
+  "cuil": "20-12345678-6",        // solo si el prospecto pidió financiación; con o sin guiones
+  "consentimiento": true          // obligatorio junto con el CUIL (precalificación crediticia)
 }
 ```
 
 ```http
-HTTP/1.1 201 Created              (o 200 OK si el email ya pertenecía a un cliente activo)
+HTTP/1.1 201 Created              (o 200 OK si el CUIL o el email ya pertenecían a un cliente activo)
 Location: /clientes/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
 
 { "clienteId": "a1b2c3d4-...", "nuevo": true, "coincidencia": "NINGUNA" }
@@ -82,10 +84,18 @@ Location: /clientes/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
 
 - **201 y 200 se tratan igual:** en los dos casos `clienteId` es el cliente a referenciar desde el lead.
 - **Reintentos seguros:** reenviar la misma alta no crea otro cliente (suma un contacto al existente).
-- **No se pisan datos:** si el email ya existía, no se cambian nombre, apellido ni provincia; solo se completan
-  campos vacíos.
-- **Errores a propagar al front:** `422` con `codigo` `VALIDACION` (lista `errores`) o `TELEFONO_INVALIDO`
-  (campo `telefono`). Un `401` (`CLAVE_SERVICIO_INVALIDA`) indica una clave mal configurada en `leads`.
+- **No se pisan datos:** si el cliente ya existía, no se cambian nombre, apellido, provincia, email ni un CUIL ya
+  registrado; solo se completan campos vacíos.
+- **CUIL y consentimiento:** van juntos y solo cuando el preformulario pide financiación. `clientes` no conoce
+  `solicitaFinanciacion`: la regla "con financiación, el CUIL es obligatorio" la valida `leads`.
+- **Deduplicación:** primero por CUIL (`coincidencia` = `CUIL`, aunque el email sea otro) y después por email
+  (`EMAIL`). Si el email coincide con un cliente que tiene otro CUIL, o pertenece a otro cliente distinto del que
+  coincide por CUIL, no se modifica nada y el cliente queda con `requiereRevision` para que lo revise el personal.
+- **Errores a propagar al front:** `422` con `codigo` `VALIDACION` (lista `errores`), `TELEFONO_INVALIDO`
+  (campo `telefono`), `CUIL_INVALIDO` (campo `cuil`) o `CONSENTIMIENTO_REQUERIDO` (campo `consentimiento`).
+  Un `401` (`CLAVE_SERVICIO_INVALIDA`) indica una clave mal configurada en `leads`.
+- **El CUIL nunca vuelve completo:** se guarda cifrado y la ficha lo muestra enmascarado (`XX-XXXX5678-X`). No
+  hay búsqueda por CUIL.
 
 ### Contrato para el front: edición, no contactar y anonimización
 
@@ -102,8 +112,14 @@ Content-Type: application/json
 { "apellido": "Gómez", "telefono": "0351 15 412-3456" }
 ```
 
-- Campos editables: `nombre`, `apellido`, `email`, `telefono`, `provincia`, `localidad`, con las mismas reglas que
-  el alta. Un campo ausente, `null` o en blanco **no se modifica** (no se puede vaciar el teléfono ni la localidad).
+- Campos editables: `nombre`, `apellido`, `email`, `telefono`, `telefonoAlternativo`, `provincia`, `localidad`,
+  con las mismas reglas que el alta. Un campo ausente, `null` o en blanco **no se modifica** (no se puede vaciar el
+  teléfono, el alternativo ni la localidad). El alternativo no puede ser igual al principal (`422`, campo
+  `telefonoAlternativo`).
+- **Resolver una revisión:** `{ "requiereRevision": false }` quita la marca y su `motivoRevision`
+  (`CUIL_DISTINTO` o `POSIBLE_DUPLICADO`). Enviar `true` responde `422`: la marca la pone solo el alta.
+- La ficha incluye `cuil` (enmascarado o `null`), `consentimientosVigentes` (`finalidad`, `versionTexto`,
+  `otorgadoEn`), `requiereRevision` y `motivoRevision`. La búsqueda no muestra ni el CUIL ni los consentimientos.
 - `200` devuelve la ficha y el `ETag` nuevo. Si no hubo cambios reales, el `ETag` no cambia.
 - `409 EMAIL_EN_USO`: el email pertenece a otro cliente. `412 VERSION_DESACTUALIZADA`: recargar la ficha.
   `428 PRECONDICION_REQUERIDA`: falta `If-Match`.
@@ -113,7 +129,8 @@ Content-Type: application/json
 `noContactar` y `noContactarDesde`, y la búsqueda incluye `noContactar`. Si la persona vuelve a llenar el
 preformulario, el alta quita la marca.
 
-**Anonimización (derecho de supresión).** Irreversible: borra nombre, apellido, email, teléfonos y localidad. Exige
+**Anonimización (derecho de supresión).** Irreversible: borra nombre, apellido, email, teléfonos, localidad y CUIL,
+y revoca los consentimientos vigentes. Exige
 el email del cliente como confirmación (va en el cuerpo, nunca en la URL):
 
 ```http
@@ -124,7 +141,8 @@ Content-Type: application/json
 ```
 
 - `204`, también si se repite. `422 CONFIRMACION_INVALIDA` si el email no es el del cliente.
-- Después, `GET /clientes/{id}` responde `410 CLIENTE_ANONIMIZADO` y el email queda libre para un alta nueva.
+- Después, `GET /clientes/{id}` responde `410 CLIENTE_ANONIMIZADO` y el email y el CUIL quedan libres para un alta
+  nueva.
 
 **Gateway (CORS).** Si el front llama desde otro origen, el gateway tiene que exponer `ETag`
 (`Access-Control-Expose-Headers`) y permitir `If-Match` y `X-Usuario` (`Access-Control-Allow-Headers`). Sin eso el

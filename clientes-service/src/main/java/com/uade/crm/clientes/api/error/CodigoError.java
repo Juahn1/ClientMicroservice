@@ -11,6 +11,8 @@ public enum CodigoError {
     VALIDACION(HttpStatus.UNPROCESSABLE_ENTITY, "Datos inválidos"),
     JSON_INVALIDO(HttpStatus.BAD_REQUEST, "Cuerpo mal formado"),
     TELEFONO_INVALIDO(HttpStatus.UNPROCESSABLE_ENTITY, "Teléfono inválido"),
+    CUIL_INVALIDO(HttpStatus.UNPROCESSABLE_ENTITY, "CUIL inválido"),
+    CONSENTIMIENTO_REQUERIDO(HttpStatus.UNPROCESSABLE_ENTITY, "Falta el consentimiento de precalificación"),
     CLAVE_SERVICIO_INVALIDA(HttpStatus.UNAUTHORIZED, "Clave de servicio inválida"),
     CLIENTE_NO_ENCONTRADO(HttpStatus.NOT_FOUND, "Cliente no encontrado"),
     CLIENTE_ANONIMIZADO(HttpStatus.GONE, "Cliente anonimizado"),

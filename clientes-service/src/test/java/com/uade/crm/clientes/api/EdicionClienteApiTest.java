@@ -63,6 +63,7 @@ class EdicionClienteApiTest {
 
     @BeforeEach
     void limpiar() {
+        jdbc.update("DELETE FROM consentimiento");
         jdbc.update("DELETE FROM cliente");
     }
 
@@ -83,6 +84,96 @@ class EdicionClienteApiTest {
         mvc.perform(get("/clientes/{id}", id))
                 .andExpect(header().string("ETag", etag))
                 .andExpect(jsonPath("$.apellido").value("Gómez"));
+    }
+
+    // --- Teléfono alternativo y resolución de la revisión (change 04)
+
+    @Test
+    void telefonoAlternativo() throws Exception {
+        UUID id = alta(martina("martina@gmail.com", "11 1234-5678", null));
+
+        editar(id, "W/\"0\"", "{ \"telefonoAlternativo\": \"11 8765-4321\" }")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.telefonoAlternativo").value("+5491187654321"))
+                .andExpect(header().string("ETag", "W/\"1\""));
+    }
+
+    @Test
+    void telefonoAlternativoIgualAlPrincipal() throws Exception {
+        UUID id = alta(martina("martina@gmail.com", "11 1234-5678", null));
+
+        editar(id, "W/\"0\"", "{ \"telefonoAlternativo\": \"11 1234-5678\" }")
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.codigo").value("VALIDACION"))
+                .andExpect(jsonPath("$.errores[0].campo").value("telefonoAlternativo"));
+
+        mvc.perform(get("/clientes/{id}", id))
+                .andExpect(header().string("ETag", "W/\"0\""))
+                .andExpect(jsonPath("$.telefonoAlternativo").doesNotExist());
+    }
+
+    @Test
+    void resolverUnaRevision() throws Exception {
+        UUID id = alta(AltaConCuilApiTest.cuerpo("martina@gmail.com", null, "27-30111222-5", true));
+        alta(AltaConCuilApiTest.cuerpo("martina@gmail.com", null, "20-12345678-6", true));
+        String etag = mvc.perform(get("/clientes/{id}", id))
+                .andExpect(jsonPath("$.motivoRevision").value("CUIL_DISTINTO"))
+                .andReturn().getResponse().getHeader("ETag");
+
+        editar(id, etag, "{ \"requiereRevision\": false }")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.requiereRevision").value(false))
+                .andExpect(jsonPath("$.motivoRevision").doesNotExist());
+    }
+
+    @Test
+    void resolverUnClienteSinRevision() throws Exception {
+        UUID id = alta(martina("martina@gmail.com", null, null));
+
+        editar(id, "W/\"0\"", "{ \"requiereRevision\": false }")
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", "W/\"0\""));
+    }
+
+    @Test
+    void marcarAMano() throws Exception {
+        UUID id = alta(martina("martina@gmail.com", null, null));
+
+        editar(id, "W/\"0\"", "{ \"requiereRevision\": true }")
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.codigo").value("VALIDACION"))
+                .andExpect(jsonPath("$.errores[0].campo").value("requiereRevision"));
+    }
+
+    /** clientes-eventos: "Edición de datos que no copia leads" y "Edición mixta". */
+    @Test
+    void soloLosCamposPublicablesGeneranEvento() throws Exception {
+        UUID soloAlternativo = alta(martina("martina@gmail.com", "11 1234-5678", null));
+        UUID mixta = alta(martina("diego@gmail.com", "11 1234-5678", null));
+
+        editar(soloAlternativo, "W/\"0\"", "{ \"telefonoAlternativo\": \"11 8765-4321\" }")
+                .andExpect(status().isOk())
+                .andExpect(header().string("ETag", "W/\"1\""));
+        editar(mixta, "W/\"0\"", "{ \"apellido\": \"Gómez\", \"telefonoAlternativo\": \"11 8765-4321\" }")
+                .andExpect(status().isOk());
+
+        JsonNode sobre = json.readTree(mensajes.esperar("cliente-actualizado", mixta, 1).getFirst().value());
+        assertThat(sobre.at("/payload/campos").toString()).isEqualTo("[\"APELLIDO\"]");
+        assertThat(mensajes.ninguno("cliente-actualizado", soloAlternativo)).isEmpty();
+    }
+
+    /** clientes-eventos, escenario "Recontacto": registrar el CUIL o marcar una revisión no publica eventos. */
+    @Test
+    void elRecontactoQueRegistraElCuilOMarcaRevisionNoPublica() throws Exception {
+        UUID id = alta(martina("martina@gmail.com", null, null));
+
+        alta(AltaConCuilApiTest.cuerpo("martina@gmail.com", null, "27-30111222-5", true));
+        alta(AltaConCuilApiTest.cuerpo("martina@gmail.com", null, "20-12345678-6", true));
+
+        mvc.perform(get("/clientes/{id}", id))
+                .andExpect(jsonPath("$.cuil").value("XX-XXXX1222-X"))
+                .andExpect(jsonPath("$.motivoRevision").value("CUIL_DISTINTO"));
+        assertThat(mensajes.ninguno("cliente-actualizado", id)).isEmpty();
     }
 
     @Test

@@ -1,15 +1,18 @@
 package com.uade.crm.clientes.api.dto;
 
 import com.uade.crm.clientes.domain.model.Cliente;
+import com.uade.crm.clientes.domain.model.MotivoRevision;
+import com.uade.crm.clientes.domain.valor.CuilProtegido;
 import com.uade.crm.clientes.domain.valor.Telefono;
 import com.uade.crm.contracts.CanalOrigen;
 import com.uade.crm.contracts.Provincia;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
- * Ficha del cliente (design D7). El teléfono va completo porque el telemarketer lo necesita para contactar;
- * {@code cuil} y {@code consentimientosVigentes} se agregan en el change 04.
+ * Ficha del cliente (design D7). El teléfono va completo porque el telemarketer lo necesita para contactar; el
+ * CUIL, nunca: solo enmascarado (design D7 del change 04).
  */
 public record ClienteResponse(
         UUID id,
@@ -26,7 +29,10 @@ public record ClienteResponse(
         Instant ultimoContactoEn,
         boolean noContactar,
         Instant noContactarDesde,
-        boolean requiereRevision) {
+        String cuil,
+        List<ConsentimientoResponse> consentimientosVigentes,
+        boolean requiereRevision,
+        MotivoRevision motivoRevision) {
 
     public static ClienteResponse de(Cliente c) {
         return new ClienteResponse(
@@ -44,6 +50,9 @@ public record ClienteResponse(
                 c.ultimoContactoEn(),
                 c.noContactar(),
                 c.noContactarDesde().orElse(null),
-                c.requiereRevision());
+                c.cuil().map(CuilProtegido::enmascarado).orElse(null),
+                c.consentimientosVigentes().stream().map(ConsentimientoResponse::de).toList(),
+                c.requiereRevision(),
+                c.motivoRevision().orElse(null));
     }
 }

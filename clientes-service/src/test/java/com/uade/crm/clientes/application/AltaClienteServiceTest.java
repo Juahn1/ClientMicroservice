@@ -44,6 +44,7 @@ class AltaClienteServiceTest {
 
     @BeforeEach
     void limpiar() {
+        jdbc.update("DELETE FROM consentimiento");
         jdbc.update("DELETE FROM cliente");
     }
 
@@ -102,6 +103,36 @@ class AltaClienteServiceTest {
                 .isEqualTo(1);
         assertThat(repositorio.buscarActivoPorEmail(Email.de(email)).orElseThrow().contactosRegistrados())
                 .isEqualTo(simultaneas);
+    }
+
+    /** Requirement "Deduplicación por CUIL", escenario "Altas simultáneas con el mismo CUIL" (design D5). */
+    @Test
+    void altasSimultaneasConElMismoCuilYEmailsDistintos() throws Exception {
+        int simultaneas = 4;
+        CountDownLatch largada = new CountDownLatch(1);
+        List<Callable<ResultadoAlta>> altas = new ArrayList<>();
+        for (int i = 0; i < simultaneas; i++) {
+            String email = "cuil-" + i + "@gmail.com";
+            altas.add(() -> {
+                largada.await();
+                return alta.registrar(factory.solicitud("Martina", "López", email, null, Provincia.BUENOS_AIRES,
+                        null, CanalOrigen.OTRO, "20-12345678-6", true));
+            });
+        }
+
+        List<ResultadoAlta> resultados = new ArrayList<>();
+        try (ExecutorService hilos = Executors.newFixedThreadPool(simultaneas)) {
+            List<Future<ResultadoAlta>> futuros = altas.stream().map(hilos::submit).toList();
+            largada.countDown();
+            for (Future<ResultadoAlta> futuro : futuros) {
+                resultados.add(futuro.get());
+            }
+        }
+
+        assertThat(resultados).extracting(ResultadoAlta::clienteId).containsOnly(resultados.get(0).clienteId());
+        assertThat(resultados).filteredOn(ResultadoAlta::nuevo).hasSize(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM cliente", Integer.class)).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM consentimiento", Integer.class)).isEqualTo(1);
     }
 
     private SolicitudAlta solicitud(String email, CanalOrigen canal) {

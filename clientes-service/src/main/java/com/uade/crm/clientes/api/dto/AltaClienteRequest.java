@@ -12,9 +12,9 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 /**
- * Alta de cliente que envía {@code leads} (design D9). Nombre y apellido, ya recortados: al menos dos caracteres,
- * empiezan y terminan con letra, y en el medio admiten espacios, apóstrofo y guion
- * ("María José", "D'Angelo", "Pérez-Gómez").
+ * Alta de cliente que envía {@code leads} (design D9), con CUIL y consentimiento opcionales (change 04). Nombre y
+ * apellido, ya recortados: al menos dos caracteres, empiezan y terminan con letra, y en el medio admiten espacios,
+ * apóstrofo y guion ("María José", "D'Angelo", "Pérez-Gómez").
  */
 public record AltaClienteRequest(
         @Schema(example = "Martina")
@@ -41,7 +41,15 @@ public record AltaClienteRequest(
         String localidad,
 
         @Schema(description = "Opcional mientras el preformulario no lo informe.")
-        CanalOrigen canalOrigen) {
+        CanalOrigen canalOrigen,
+
+        @Schema(description = "Solo si el prospecto pidió financiación. Con o sin guiones; exige consentimiento = true. "
+                + "Nunca se devuelve completo.", example = "20-12345678-6")
+        @Size(max = 20)
+        String cuil,
+
+        @Schema(description = "Consentimiento de precalificación crediticia. Solo junto con el CUIL.")
+        Boolean consentimiento) {
 
     static final String NOMBRE = "\\p{L}[\\p{L} '’-]*\\p{L}";
     static final String MENSAJE_NOMBRE =
@@ -56,6 +64,7 @@ public record AltaClienteRequest(
         email = recortar(email);
         telefono = recortar(telefono);
         localidad = recortar(localidad);
+        cuil = recortar(cuil);
     }
 
     private static String recortar(String texto) {
@@ -63,6 +72,14 @@ public record AltaClienteRequest(
     }
 
     public SolicitudAlta aSolicitud(ClienteFactory factory) {
-        return factory.solicitud(nombre, apellido, email, telefono, provincia, localidad, canalOrigen);
+        return factory.solicitud(nombre, apellido, email, telefono, provincia, localidad, canalOrigen, cuil,
+                consentimiento);
+    }
+
+    /** Sin datos personales: el record imprimiría el CUIL, el email y el teléfono completos. */
+    @Override
+    public String toString() {
+        return "AltaClienteRequest[provincia=" + provincia + ", canalOrigen=" + canalOrigen + ", conCuil="
+                + (cuil != null) + ", consentimiento=" + consentimiento + "]";
     }
 }

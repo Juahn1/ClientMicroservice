@@ -128,4 +128,20 @@ class ErroresApiTest {
                     .andExpect(jsonPath("$.errores[0].campo").value("email"));
         }
     }
+
+    /** Códigos del change 04 (design D4): status, codigo, campo y correlationId. */
+    @ParameterizedTest
+    @CsvSource({
+            "CUIL_INVALIDO, cuil-invalido, cuil",
+            "CONSENTIMIENTO_REQUERIDO, consentimiento-requerido, consentimiento",
+            "VALIDACION, validacion, telefonoAlternativo"})
+    void codigosDelCuilYDatoInvalido(String codigo, String slug, String campo) throws Exception {
+        mvc.perform(post("/pruebas/errores/{codigo}", codigo).header("X-Correlation-Id", "abc-123"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+                .andExpect(jsonPath("$.codigo").value(codigo))
+                .andExpect(jsonPath("$.type").value("https://crm.uade.local/errores/" + slug))
+                .andExpect(jsonPath("$.errores[0].campo").value(campo))
+                .andExpect(jsonPath("$.correlationId").value("abc-123"));
+    }
 }

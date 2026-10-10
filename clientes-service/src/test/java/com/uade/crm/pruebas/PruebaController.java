@@ -7,6 +7,9 @@ import com.uade.crm.clientes.application.EmailEnUsoException;
 import com.uade.crm.clientes.application.VersionDesactualizadaException;
 import com.uade.crm.clientes.domain.model.ClienteAnonimizadoException;
 import com.uade.crm.clientes.domain.model.ClienteNoEncontradoException;
+import com.uade.crm.clientes.domain.model.ConsentimientoRequeridoException;
+import com.uade.crm.clientes.domain.model.DatoInvalidoException;
+import com.uade.crm.clientes.domain.valor.CuilInvalidoException;
 import com.uade.crm.contracts.Provincia;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Email;
@@ -67,6 +70,9 @@ public class PruebaController {
             case "VERSION_DESACTUALIZADA" -> new VersionDesactualizadaException(id);
             case "EMAIL_EN_USO" -> new EmailEnUsoException(id);
             case "CONFIRMACION_INVALIDA" -> new ConfirmacionInvalidaException(id);
+            case "CUIL_INVALIDO" -> new CuilInvalidoException();
+            case "CONSENTIMIENTO_REQUERIDO" -> new ConsentimientoRequeridoException();
+            case "VALIDACION" -> new DatoInvalidoException("telefonoAlternativo", "no puede ser igual al principal");
             default -> new IllegalArgumentException(codigo);
         };
     }

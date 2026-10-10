@@ -1,6 +1,7 @@
 package com.uade.crm.clientes.config;
 
 import com.uade.crm.clientes.domain.ClienteFactory;
+import com.uade.crm.clientes.domain.port.CifradorCuil;
 import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,7 +16,8 @@ public class DominioConfig {
     }
 
     @Bean
-    ClienteFactory clienteFactory(ClientesProperties properties, Clock reloj) {
-        return new ClienteFactory(properties.telefono().regionPorDefecto(), reloj);
+    ClienteFactory clienteFactory(ClientesProperties properties, Clock reloj, CifradorCuil cifrador) {
+        return new ClienteFactory(properties.telefono().regionPorDefecto(), reloj, cifrador,
+                properties.consentimiento().versionTexto());
     }
 }

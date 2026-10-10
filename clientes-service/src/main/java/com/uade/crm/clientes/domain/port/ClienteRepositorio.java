@@ -17,6 +17,12 @@ public interface ClienteRepositorio {
      */
     Optional<Cliente> buscarActivoPorEmailParaActualizar(Email email);
 
+    /**
+     * Cliente activo con ese índice ciego de CUIL, con la fila bloqueada hasta el fin de la transacción (design D5 del
+     * change 04). Recibe el hash, nunca el CUIL.
+     */
+    Optional<Cliente> buscarActivoPorCuilParaActualizar(String cuilHash);
+
     Optional<Cliente> buscarActivoPorId(UUID id);
 
     /** Cliente en cualquier estado: distingue un ID inexistente (404) de uno anonimizado (410). */
@@ -34,7 +40,7 @@ public interface ClienteRepositorio {
 
     /**
      * Inserta o actualiza el cliente y devuelve la versión guardada. Si ya hay otro cliente activo con el mismo
-     * email lanza {@link EmailDuplicadoException}; si la versión quedó desactualizada,
+     * email o el mismo CUIL lanza {@link ClaveDuplicadaException}; si la versión quedó desactualizada,
      * {@code OptimisticLockingFailureException}.
      */
     Cliente guardar(Cliente cliente);
