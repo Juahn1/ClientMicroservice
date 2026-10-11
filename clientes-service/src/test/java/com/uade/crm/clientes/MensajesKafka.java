@@ -6,24 +6,56 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.autoconfigure.kafka.KafkaConnectionDetails;
+import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Component;
 
 /**
- * Lee los mensajes que publicó el servicio en el Kafka de prueba. Los tests comparten el broker, así que se filtra
- * por clave ({@code clienteId}): cada test usa clientes propios.
+ * Lee los mensajes que publicó el servicio en el Kafka de prueba y publica los que consume (change 08). Los tests
+ * comparten el broker, así que se filtra por clave ({@code clienteId} o {@code leadId}): cada test usa claves propias.
  */
 @Component
 public class MensajesKafka {
 
     private final String bootstrap;
+    private KafkaProducer<String, String> productor;
 
     public MensajesKafka(KafkaConnectionDetails conexion) {
         this.bootstrap = String.join(",", conexion.getConsumerBootstrapServers());
+    }
+
+    /**
+     * Publica un mensaje y espera la confirmación del broker. El valor viaja como UTF-8, igual que el JSON de
+     * {@code calificacion}.
+     */
+    public synchronized void publicar(String topico, UUID clave, String valor) {
+        if (productor == null) {
+            productor = new KafkaProducer<>(Map.of(
+                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap,
+                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
+                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class));
+        }
+        try {
+            productor.send(new ProducerRecord<>(topico, clave.toString(), valor)).get(15, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new IllegalStateException("No se pudo publicar en " + topico, e);
+        }
+    }
+
+    @PreDestroy
+    synchronized void cerrar() {
+        if (productor != null) {
+            productor.close();
+        }
     }
 
     /** Espera hasta {@code esperados} mensajes con la clave dada o hasta 15 segundos. */

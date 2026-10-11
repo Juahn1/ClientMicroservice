@@ -77,6 +77,7 @@ class SituacionCrediticiaApiTest {
     void limpiar() {
         jdbc.update("DELETE FROM situacion_crediticia");
         jdbc.update("DELETE FROM consentimiento");
+        jdbc.update("DELETE FROM historial_calificacion");
         jdbc.update("DELETE FROM cliente");
         fuente = (FuenteDePrueba) fuenteBean;
         fuente.restablecer();

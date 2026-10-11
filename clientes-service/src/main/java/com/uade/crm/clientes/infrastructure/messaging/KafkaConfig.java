@@ -11,8 +11,9 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 
 /**
- * Tópicos que publica el servicio (design D8 del change 03). {@code KafkaAdmin} los crea al arrancar si no existen
- * y, si el broker no está disponible, no impide el arranque.
+ * Tópicos propios del servicio (design D8 del change 03 y D5 del change 08): los que publica y el de mensajes fallidos
+ * del consumidor. {@code KafkaAdmin} los crea al arrancar si no existen y, si el broker no está disponible, no impide
+ * el arranque. {@code lead-calificado} no se crea: es de {@code calificacion}.
  */
 @Configuration
 class KafkaConfig {
@@ -37,6 +38,12 @@ class KafkaConfig {
     @Bean
     NewTopic topicoClienteAnonimizado(ClientesProperties properties) {
         return topico(properties.kafka().topicos().clienteAnonimizado(), properties.kafka());
+    }
+
+    /** Mensajes de {@code lead-calificado} que no se pudieron registrar (design D5 del change 08). */
+    @Bean
+    NewTopic topicoLeadCalificadoFallidos(ClientesProperties properties) {
+        return topico(properties.kafka().topicos().leadCalificadoDlt(), properties.kafka());
     }
 
     private static NewTopic topico(String nombre, ClientesProperties.Kafka kafka) {

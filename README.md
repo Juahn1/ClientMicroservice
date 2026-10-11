@@ -28,6 +28,9 @@ Variables obligatorias (sin ellas el servicio no arranca, a propósito):
 Para desarrollo sin Docker del servicio: `mvn -pl clientes-service -am spring-boot:run` con el perfil `local`
 (usa PostgreSQL y Kafka de `infra/docker-compose.yml` y claves ficticias).
 
+Opcional: `CLIENTES_HISTORIAL_ZONA_FECHA` (por defecto `America/Argentina/Buenos_Aires`), la zona en la que se interpreta
+la `fecha` de `LeadCalificado` cuando llega sin zona.
+
 Tests: `mvn verify` (los de integración usan Testcontainers, así que necesitan Docker).
 
 Contrato OpenAPI: `GET /v3/api-docs` y Swagger UI en `/swagger-ui.html`.
@@ -50,6 +53,7 @@ A través del gateway las rutas se exponen como `/api/clientes/**`.
 | `DELETE` | `/clientes/{id}/no-contactar` | Front (personal del negocio) | `204` · `404` · `410` |
 | `POST` | `/clientes/{id}/anonimizacion` | Front (personal del negocio), con el email como confirmación | `204` · `404` · `422` |
 | `GET` | `/clientes/{id}/situacion-crediticia` | Solo `calificacion` (con su `X-Api-Key`) | `200` con `estado` · `401` · `404` · `410` |
+| `GET` | `/clientes/{id}/historial` | Front (ficha del lead) | `200` (lista vacía si no tiene) · `404` · `410` |
 
 Las escrituras del personal no piden `X-Api-Key` (no hay autenticación de usuarios en la Primera Parte). Aceptan
 el header opcional `X-Usuario` (por ejemplo `tm-ana`), que queda en los logs junto al `correlationId`.
@@ -171,6 +175,41 @@ X-Api-Key: <CLIENTES_CLAVE_CALIFICACION>
   Parte la fuente es simulada (`modo: simulado`): el último dígito del DNI decide el resultado (0–4 → 1, 5–6 → 2,
   7 → 3, 8 → 5, 9 → sin registros). Por ejemplo, `20-12345678-6` da situación 5.
 - Detalle para el equipo en `docs/contrato-equipo/clientes-05-para-contratos-backend.md`.
+
+### Contrato para el front: historial de calificaciones
+
+```http
+GET /clientes/{id}/historial
+```
+
+```json
+{ "clienteId": "3fa8...", "calificaciones": [
+  { "leadId": "550e...", "nivel": "POTABLE", "puntaje": 35, "origen": "MANUAL",
+    "calculadaEn": "2026-10-11T19:05:00Z", "observacion": "Anticipo confirmado", "motivos": [] } ] }
+```
+
+- Todas las calificaciones de todos los leads del cliente, la calculada más recientemente primero y sin paginar.
+  `nivel` y `origen` son texto (vocabulario de `calificacion`); `calculadaEn` en UTC; `observacion` puede ser `null`.
+- Se alimenta del evento `LeadCalificado`: una calificación nueva puede tardar unos segundos en aparecer.
+- Detalle para el equipo en `docs/contrato-equipo/clientes-08-para-contratos-backend.md`.
+
+### Eventos que consume `clientes` (de `calificacion`)
+
+| Tópico | Grupo | Para qué |
+| --- | --- | --- |
+| `lead-calificado` | `clientes-historial` | Registrar cada calificación en el historial del cliente |
+
+- Acepta el JSON plano que publica hoy `calificacion` y también el sobre común. Campos obligatorios: `leadId`,
+  `clienteId`, `puntos`, `nivel`, `origen` y `fecha`. Una `fecha` sin zona se interpreta en
+  `clientes.historial.zona-fecha`.
+- Idempotente: un mismo `leadId` + `origen` + `fecha` se registra una sola vez. Las calificaciones de clientes
+  anonimizados o inexistentes se descartan con un log.
+- Un mensaje inválido va directo a `lead-calificado.clientes.DLT`; una falla transitoria (por ejemplo, la base caída)
+  se reintenta 5 veces con espera creciente (unos 62 s en total) y después va al mismo tópico. En los dos casos queda
+  un WARN con partición, offset y clave, y el consumidor sigue con el siguiente mensaje. El reproceso es manual:
+  republicar el mensaje en `lead-calificado`.
+- `clientes` no crea `lead-calificado`: para probar en local, crearlo con
+  `kafka-topics.sh --create --topic lead-calificado --bootstrap-server localhost:9092` dentro del contenedor de Kafka.
 
 ### Eventos que publica `clientes` (para `leads`)
 

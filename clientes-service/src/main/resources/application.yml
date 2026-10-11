@@ -28,6 +28,16 @@ spring:
         "[max.block.ms]": 2000
         "[delivery.timeout.ms]": 10000
         "[request.timeout.ms]": 5000
+    # Consumidor de lead-calificado para el historial de calificaciones (design D2 y D7 del change 08). El valor llega
+    # como bytes y lo traduce LeadCalificadoTraductor: un JSON roto no traba la partición y el tópico de fallidos
+    # guarda el mensaje original.
+    consumer:
+      group-id: clientes-historial
+      auto-offset-reset: earliest     # la primera vez carga lo que calificacion ya publicó; releer no duplica
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.ByteArrayDeserializer
+      properties:
+        "[allow.auto.create.topics]": false   # lead-calificado es de calificacion: no lo crea este servicio
 
 management:
   endpoints:
@@ -72,8 +82,18 @@ clientes:
     topicos:
       cliente-actualizado: cliente-actualizado
       cliente-anonimizado: cliente-anonimizado
+      lead-calificado: lead-calificado                    # de calificacion: el servicio lo consume, no lo crea
+      lead-calificado-dlt: lead-calificado.clientes.DLT    # mensajes de lead-calificado que no se pudieron registrar
     particiones: 3
     replicas: 1             # 1 en local y en el laboratorio (un solo broker)
+  # Historial de calificaciones (design D3 y D5 del change 08).
+  historial:
+    # Para la fecha de LeadCalificado cuando llega sin zona.
+    zona-fecha: ${CLIENTES_HISTORIAL_ZONA_FECHA:America/Argentina/Buenos_Aires}
+    reintentos:               # falla transitoria: 2s, 4s, 8s, 16s, 32s (unos 62 s) y después al DLT
+      intentos: 5
+      espera-inicial: 2s
+      multiplicador: 2
   errores:
     tipo-base: https://crm.uade.local/errores/
 

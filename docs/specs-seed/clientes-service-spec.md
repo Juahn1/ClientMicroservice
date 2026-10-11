@@ -425,6 +425,16 @@ Content-Type: application/problem+json
 
 `ClienteAnonimizado` lleva solo `clienteId`. Los eventos **no** llevan nombre, teléfono, email ni CUIL: el consumidor que necesite el dato nuevo lo pide por REST (patrón *event notification*). Los records van en `contracts` (`com.uade.crm.contracts.clientes`).
 
+**Eventos que consume `clientes`** (change 08):
+
+| Tópico | Evento | Clave | Productor | Para qué | Entrega |
+| --- | --- | --- | --- | --- | --- |
+| `lead-calificado` | `LeadCalificado` | leadId | calificacion | Historial de calificaciones del cliente | Primera |
+
+Grupo `clientes-historial`. Hoy `calificacion` lo publica como JSON plano, sin el sobre común y con la fecha sin zona;
+`clientes` acepta ese formato y también el sobre. Los mensajes que no puede registrar van a
+`lead-calificado.clientes.DLT`.
+
 ### 5.6 Reglas de normalización y validación
 
 **Teléfono.** Se normaliza con libphonenumber (región por defecto AR) a E.164 **móvil**, porque todo el contacto con la agencia es por WhatsApp. libphonenumber interpreta `11 1234-5678` como línea fija (`+541112345678`), así que si el número argentino resultante no es móvil se inserta el `9` después de `+54` y se vuelve a validar.
@@ -565,6 +575,13 @@ Orden de implementación. Cada change es un PR. Los changes 01 a 05 son el núcl
 | 05 | `clientes-05-situacion-crediticia` | `clientes-situacion-crediticia` | 04 |
 | 06 | `clientes-06-notas` | `clientes-seguimiento` | 02 |
 | 07 | `clientes-07-preferencias-e-interesados` | `clientes-seguimiento` | 04 (consentimiento comercial) |
+| 08 | `clientes-08-historial-calificaciones` | `clientes-historial-calificaciones` | 03 (anonimización) |
+
+> **Nota (change 08, 2026-10-11):** el change 08 no estaba en este documento. Lo agregó el contrato del equipo
+> (`contratos-backend.md` v1.1), que mueve el historial de calificaciones de `calificacion` a `clientes`: consume
+> `lead-calificado` y expone `GET /clientes/{id}/historial` para el front. Va antes que 06 y 07 (el número es el que
+> anunció el change 02); por eso la reactivación por stock del backlog pasó de `clientes-08` a `clientes-16`. Ver el
+> change archivado y `docs/contrato-equipo/clientes-08-para-contratos-backend.md`.
 
 ### 6.1 `clientes-01-base-servicio`
 
@@ -1415,7 +1432,6 @@ Combinados con los casos de la sección 6.3 del documento de arquitectura (preci
 
 | ID | Funcionalidad | Entrega | Notas |
 | --- | --- | --- | --- |
-| clientes-08 | **Reactivación por stock (RFC-11).** Consumir `vehiculo-ingresado` y `vehiculo-precio-actualizado` de `vehiculos`, buscar interesados y publicar `OportunidadDetectada` con `vehiculoId` y la lista de `clienteId`. `leads` crea leads de reactivación en la cola. | Segunda | Demuestra integración asincrónica en ambos sentidos. Requiere idempotencia del consumidor (tabla de `eventId` procesados) y que `vehiculos` publique eventos. |
 | clientes-09 | **Adaptador SOAP de precalificación (RFC-12).** `BcraSoapSituacionAdapter` que consume el WSDL del servicio `precalificacion`. Configura los timeouts de conexión y de lectura de su cliente HTTP con `clientes.situacion-crediticia.timeout` y extiende `ContratoFuenteSituacionTest` (contrato del puerto del change 05). Suma también la precarga de la caché después de un alta con CUIL, si con la fuente real hace falta. | Segunda | Solo infraestructura; los specs del change 05 no cambian salvo `fuente` = `BCRA`. |
 | clientes-10 | **Outbox.** Reemplazar la publicación AFTER_COMMIT por tabla outbox y relay. | Integrador | Alineado con AD-07. |
 | clientes-11 | **Auditoría de accesos al CUIL.** Registrar quién y cuándo usó el CUIL (consultas a la fuente, búsquedas por CUIL). | Integrador | Depende de la autenticación. |
@@ -1423,6 +1439,7 @@ Combinados con los casos de la sección 6.3 del documento de arquitectura (preci
 | clientes-13 | **Etiquetas y segmentos** (referido, recompra, flota). | Post-TP | Base para campañas. |
 | clientes-14 | **Exportación de datos del titular** (derecho de acceso, Ley 25.326). | Post-TP | Simple una vez que existe la ficha completa. |
 | clientes-15 | **Privacidad ampliada** (diferido del change 04). `PUT /clientes/{id}/cuil` (registrar o corregir el CUIL, invalidando la situación crediticia), `POST /clientes/busqueda-por-cuil` (CUIL en el cuerpo), `GET/POST/DELETE /clientes/{id}/consentimientos` (otorgar y revocar; revocar precalificación borra el CUIL y la situación crediticia guardada), finalidad `CONTACTO_COMERCIAL` (la necesita el 07) y `email_alternativo` para el email descartado en una coincidencia por CUIL. | Segunda | Aditivo: el modelo de datos del 04 ya lo soporta, sin migrar datos. La revocación conviene sumarla con el 05, cuando tiene efecto observable. El 05 no la incluyó: `PUT /cuil` y la revocación tienen que borrar la caché de situación crediticia, y la revocación agrega la rama `SIN_CONSENTIMIENTO` del servicio con su escenario. |
+| clientes-16 | **Reactivación por stock (RFC-11).** Consumir `vehiculo-ingresado` y `vehiculo-precio-actualizado` de `vehiculos`, buscar interesados y publicar `OportunidadDetectada` con `vehiculoId` y la lista de `clienteId`. `leads` crea leads de reactivación en la cola. | Segunda | Demuestra integración asincrónica en ambos sentidos. Requiere idempotencia del consumidor y que `vehiculos` publique eventos. Antes se llamaba `clientes-08` (ese número quedó para el historial de calificaciones). A diferencia de `lead-calificado`, sus eventos no tienen una clave natural evidente: puede necesitar la tabla de `eventId` procesados que el 08 no creó. El 08 ya dejó el patrón de consumidor (traducción propia del mensaje, reintentos acotados y tópico de fallidos `<tópico>.clientes.DLT`). |
 
 ---
 

@@ -27,11 +27,19 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
     /** Evita inyección en logs y headers: un valor fuera de este formato se trata como ausente. */
     private static final Pattern FORMATO_VALIDO = Pattern.compile("[A-Za-z0-9._-]{1,64}");
 
+    /**
+     * Si el valor se puede usar como {@code correlationId}. También lo usa el consumidor de {@code lead-calificado}
+     * para el {@code correlationId} que llega en el sobre de un evento (design D7 del change 08).
+     */
+    public static boolean formatoValido(String correlationId) {
+        return correlationId != null && FORMATO_VALIDO.matcher(correlationId).matches();
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String correlationId = request.getHeader(HEADER);
-        if (correlationId == null || !FORMATO_VALIDO.matcher(correlationId).matches()) {
+        if (!formatoValido(correlationId)) {
             correlationId = UUID.randomUUID().toString();
         }
         MDC.put(MDC_KEY, correlationId);

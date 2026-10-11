@@ -38,6 +38,12 @@ class ClaveServicioPropertiesTest {
                     "clientes.paginacion.tamanio-por-defecto=20",
                     "clientes.kafka.topicos.cliente-actualizado=a",
                     "clientes.kafka.topicos.cliente-anonimizado=b",
+                    "clientes.kafka.topicos.lead-calificado=c",
+                    "clientes.kafka.topicos.lead-calificado-dlt=d",
+                    "clientes.historial.zona-fecha=America/Argentina/Buenos_Aires",
+                    "clientes.historial.reintentos.intentos=3",
+                    "clientes.historial.reintentos.espera-inicial=50ms",
+                    "clientes.historial.reintentos.multiplicador=2",
                     "clientes.kafka.particiones=3",
                     "clientes.kafka.replicas=1",
                     "clientes.errores.tipo-base=https://crm.uade.local/errores/");

@@ -5,9 +5,11 @@ import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.time.ZoneId;
 import java.util.Base64;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
@@ -26,6 +28,7 @@ public record ClientesProperties(
         @Valid @NotNull Interesados interesados,
         @Valid @NotNull Paginacion paginacion,
         @Valid @NotNull Kafka kafka,
+        @Valid @NotNull Historial historial,
         @Valid @NotNull Errores errores) {
 
     /**
@@ -136,10 +139,33 @@ public record ClientesProperties(
         }
     }
 
-    /** Tópicos que publica el servicio; particiones y réplicas se usan al crearlos (design D8). */
+    /**
+     * Tópicos que publica y consume el servicio (design D8 del change 03 y D9 del change 08). Particiones y réplicas
+     * se usan al crear los tópicos propios, incluido el de mensajes fallidos; {@code leadCalificado} es de
+     * {@code calificacion} y el servicio no lo crea.
+     */
     public record Kafka(@Valid @NotNull Topicos topicos, @Positive int particiones, @Positive int replicas) {
 
-        public record Topicos(@NotBlank String clienteActualizado, @NotBlank String clienteAnonimizado) {
+        public record Topicos(
+                @NotBlank String clienteActualizado,
+                @NotBlank String clienteAnonimizado,
+                @NotBlank String leadCalificado,
+                @NotBlank String leadCalificadoDlt) {
+        }
+    }
+
+    /**
+     * Historial de calificaciones (design D3, D5 y D9 del change 08). {@code zonaFecha} interpreta la fecha de
+     * {@code LeadCalificado} cuando llega sin zona; {@code reintentos} acota los reintentos de una falla transitoria
+     * antes de mandar el mensaje al tópico de fallidos.
+     */
+    public record Historial(@NotNull ZoneId zonaFecha, @Valid @NotNull Reintentos reintentos) {
+
+        /** Espera antes del reintento n (desde 0): {@code esperaInicial * multiplicador^n}. */
+        public record Reintentos(
+                @PositiveOrZero int intentos,
+                @NotNull Duration esperaInicial,
+                @DecimalMin("1.0") double multiplicador) {
         }
     }
 

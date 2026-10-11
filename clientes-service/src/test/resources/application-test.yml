@@ -10,6 +10,12 @@ clientes:
   # Valores cortos para que los tests de degradación sean rápidos (design D10 del change 05).
   situacion-crediticia:
     timeout: 300ms
+  # Reintentos cortos del consumidor de lead-calificado (design D10 del change 08).
+  historial:
+    reintentos:
+      intentos: 3
+      espera-inicial: 50ms
+      multiplicador: 2
 
 resilience4j:
   circuitbreaker:

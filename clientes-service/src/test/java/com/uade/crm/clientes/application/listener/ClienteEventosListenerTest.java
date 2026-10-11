@@ -35,7 +35,8 @@ class ClienteEventosListenerTest {
     void crear() {
         ClientesProperties properties = mock(ClientesProperties.class);
         when(properties.kafka()).thenReturn(new ClientesProperties.Kafka(
-                new ClientesProperties.Kafka.Topicos("cliente-actualizado", "cliente-anonimizado"), 3, 1));
+                new ClientesProperties.Kafka.Topicos("cliente-actualizado", "cliente-anonimizado",
+                        "lead-calificado", "lead-calificado.clientes.DLT"), 3, 1));
         listener = new ClienteEventosListener(publicador, properties);
     }
 

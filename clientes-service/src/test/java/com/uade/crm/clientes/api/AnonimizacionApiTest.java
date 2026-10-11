@@ -15,6 +15,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.uade.crm.clientes.MensajesKafka;
 import com.uade.crm.clientes.PruebaIntegracion;
+import com.uade.crm.clientes.domain.model.CalificacionHistorica;
+import com.uade.crm.clientes.domain.port.HistorialCalificaciones;
+import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,10 +54,14 @@ class AnonimizacionApiTest {
     @Autowired
     MensajesKafka mensajes;
 
+    @Autowired
+    HistorialCalificaciones historial;
+
     @BeforeEach
     void limpiar() {
         jdbc.update("DELETE FROM situacion_crediticia");
         jdbc.update("DELETE FROM consentimiento");
+        jdbc.update("DELETE FROM historial_calificacion");
         jdbc.update("DELETE FROM cliente");
     }
 
@@ -149,6 +157,43 @@ class AnonimizacionApiTest {
         assertThat(jdbc.queryForObject("SELECT cuil_hash IS NOT NULL FROM cliente WHERE id = ?", Boolean.class, id))
                 .isTrue();
         assertThat(situacionesGuardadas(id)).isEqualTo(1);
+        assertThat(mensajes.ninguno("cliente-anonimizado", id)).isEmpty();
+    }
+
+    /** Change 08: "Historial de calificaciones eliminado". */
+    @Test
+    void anonimizarBorraElHistorialDeCalificaciones() throws Exception {
+        UUID id = alta(martina("martina@gmail.com", null, null));
+        UUID otro = alta(martina("diego@gmail.com", null, null));
+        calificar(id, "AUTOMATICA");
+        calificar(id, "MANUAL");
+        calificar(otro, "AUTOMATICA");
+
+        anonimizar(id, "martina@gmail.com").andExpect(status().isNoContent());
+
+        assertThat(calificaciones(id)).isZero();
+        assertThat(calificaciones(otro)).isEqualTo(1);
+    }
+
+    /** Design D6 del change 08: si no se puede borrar el historial, la anonimización completa se revierte. */
+    @Test
+    void siFallaElBorradoDelHistorialLaAnonimizacionSeRevierte() throws Exception {
+        UUID id = alta(martina("martina@gmail.com", null, null));
+        calificar(id, "AUTOMATICA");
+        jdbc.execute("""
+                CREATE FUNCTION prueba_impedir_borrado() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN RAISE EXCEPTION 'borrado impedido por el test'; END $$""");
+        jdbc.execute("CREATE TRIGGER prueba_impedir_borrado BEFORE DELETE ON historial_calificacion "
+                + "FOR EACH ROW EXECUTE FUNCTION prueba_impedir_borrado()");
+        try {
+            anonimizar(id, "martina@gmail.com").andExpect(status().isInternalServerError());
+        } finally {
+            jdbc.execute("DROP TRIGGER prueba_impedir_borrado ON historial_calificacion");
+            jdbc.execute("DROP FUNCTION prueba_impedir_borrado()");
+        }
+
+        assertThat(jdbc.queryForObject("SELECT estado FROM cliente WHERE id = ?", String.class, id)).isEqualTo("ACTIVO");
+        assertThat(calificaciones(id)).isEqualTo(1);
         assertThat(mensajes.ninguno("cliente-anonimizado", id)).isEmpty();
     }
 
@@ -280,6 +325,16 @@ class AnonimizacionApiTest {
     private ResultActions consultarSituacion(UUID id) throws Exception {
         return mvc.perform(get("/clientes/{id}/situacion-crediticia", id)
                 .header("X-Api-Key", SituacionCrediticiaApiTest.CLAVE_CALIFICACION));
+    }
+
+    private void calificar(UUID cliente, String origen) {
+        historial.registrar(new CalificacionHistorica(UUID.randomUUID(), cliente, "POTABLE", 35, origen,
+                Instant.parse("2026-10-11T18:30:00Z"), null, List.of("motivo")), Instant.now());
+    }
+
+    private int calificaciones(UUID id) {
+        return jdbc.queryForObject("SELECT count(*) FROM historial_calificacion WHERE cliente_id = ?", Integer.class,
+                id);
     }
 
     private int situacionesGuardadas(UUID id) {

@@ -46,6 +46,9 @@ class ContextoTest {
     @Autowired
     Flyway flyway;
 
+    @Autowired
+    org.springframework.context.ApplicationContext contexto;
+
     @Test
     void cargaLaConfiguracionDeLaSeccion59() {
         assertThat(properties.paginacion().tamanioMaximo()).isEqualTo(50);
@@ -55,6 +58,12 @@ class ContextoTest {
         assertThat(properties.situacionCrediticia().vigencia()).isEqualTo(Duration.ofDays(30));
         assertThat(properties.kafka().topicos().clienteActualizado()).isEqualTo("cliente-actualizado");
         assertThat(properties.cuil().claveCifrado()).isNotBlank();
+        assertThat(properties.kafka().topicos().leadCalificado()).isEqualTo("lead-calificado");
+        assertThat(properties.kafka().topicos().leadCalificadoDlt()).isEqualTo("lead-calificado.clientes.DLT");
+        assertThat(properties.historial().zonaFecha()).isEqualTo(java.time.ZoneId.of("America/Argentina/Buenos_Aires"));
+        // Perfil test: reintentos cortos (design D10 del change 08).
+        assertThat(properties.historial().reintentos().intentos()).isEqualTo(3);
+        assertThat(properties.historial().reintentos().esperaInicial()).isEqualTo(Duration.ofMillis(50));
     }
 
     @Test
@@ -65,7 +74,7 @@ class ContextoTest {
         assertThat(flyway.info().applied())
                 .extracting(migracion -> migracion.getScript())
                 .containsExactly("V1__cliente.sql", "V2__no_contactar.sql", "V3__cuil_y_consentimiento.sql",
-                        "V4__situacion_crediticia.sql");
+                        "V4__situacion_crediticia.sql", "V5__historial_calificacion.sql");
     }
 
     @Test
@@ -102,6 +111,14 @@ class ContextoTest {
                         .value("boolean"))
                 .andExpect(jsonPath("$.components.schemas.AltaClienteResponse.properties.coincidencia.enum",
                         org.hamcrest.Matchers.hasItem("CUIL")));
+    }
+
+    /** Tarea 3.3 del change 08: el manejo de errores del consumidor no reemplaza al template del publicador. */
+    @Test
+    void elConsumidorTieneSuManejadorDeErroresYElPublicadorSuTemplate() {
+        assertThat(contexto.getBeansOfType(org.springframework.kafka.core.KafkaTemplate.class)).hasSize(1);
+        assertThat(contexto.getBean(org.springframework.kafka.listener.CommonErrorHandler.class))
+                .isInstanceOf(org.springframework.kafka.listener.DefaultErrorHandler.class);
     }
 
     @Test
