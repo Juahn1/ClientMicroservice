@@ -27,6 +27,10 @@ spring:
   # Productor de eventos de integración (design D8 y D11). Los timeouts cortos evitan que un broker caído
   # demore la respuesta HTTP, porque la publicación corre después del commit en el hilo del request.
   kafka:
+    ssl:
+      trust-store-location: file:client.truststore.jks
+      trust-store-password: ${KAFKA_TRUSTSTORE_PASSWORD}
+      trust-store-type: JKS
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       # El valor se serializa como JSON con el ObjectMapper de la aplicación y sin headers de tipo
