@@ -1,6 +1,10 @@
-# Spec Delta
+# clientes-historial-calificaciones Specification
 
-## ADDED Requirements
+## Purpose
+
+Historial de las calificaciones de los leads de un cliente para la ficha del lead en el front: registro idempotente de los eventos `LeadCalificado` que publica `calificacion`, solo para clientes activos y sin frenar el consumo ante mensajes inválidos o fallas, y consulta ordenada del historial.
+
+## Requirements
 
 ### Requirement: Registro de las calificaciones publicadas
 El servicio MUST registrar en el historial del cliente cada calificación que `calificacion` publica en el tópico `lead-calificado`, sea un cálculo automático o una corrección manual, con su `leadId`, `nivel`, puntaje, `origen`, fecha de cálculo, `observacion` y `motivos`.

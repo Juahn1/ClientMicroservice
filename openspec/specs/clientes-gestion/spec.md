@@ -268,7 +268,7 @@ Ambas operaciones MUST ser idempotentes y responder 204. La marca MUST NOT cambi
 
 ### Requirement: Anonimización a pedido del titular
 El servicio MUST atender `POST /clientes/{id}/anonimizacion` eliminando los datos personales del cliente (nombre y apellido reemplazados por `ANONIMIZADO`; email, teléfonos, localidad y CUIL eliminados) y conservando el ID, la provincia, los canales, el contador de contactos y las fechas.
-Los consentimientos vigentes MUST quedar revocados y la situación crediticia guardada MUST eliminarse, en la misma operación. La operación MUST responder 204, MUST ser idempotente y MUST liberar el email y el CUIL para un alta futura.
+Los consentimientos vigentes MUST quedar revocados, y la situación crediticia guardada y el historial de calificaciones MUST eliminarse, en la misma operación. La operación MUST responder 204, MUST ser idempotente y MUST liberar el email y el CUIL para un alta futura.
 
 #### Scenario: Anonimización
 - **WHEN** se envía `POST /clientes/{id}/anonimizacion` de un cliente activo con su email como confirmación
@@ -289,6 +289,10 @@ Los consentimientos vigentes MUST quedar revocados y la situación crediticia gu
 #### Scenario: Situación crediticia eliminada
 - **WHEN** se anonimiza un cliente que tiene guardada una situación crediticia
 - **THEN** el servicio ya no guarda ninguna situación crediticia de ese cliente
+
+#### Scenario: Historial de calificaciones eliminado
+- **WHEN** se anonimiza un cliente que tiene calificaciones registradas en su historial
+- **THEN** el servicio ya no guarda ninguna calificación de ese cliente
 
 #### Scenario: Anonimización repetida
 - **WHEN** se envía `POST /clientes/{id}/anonimizacion` de un cliente ya anonimizado
