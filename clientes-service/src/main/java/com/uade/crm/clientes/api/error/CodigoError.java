@@ -1,0 +1,47 @@
+package com.uade.crm.clientes.api.error;
+
+import java.util.Locale;
+import org.springframework.http.HttpStatus;
+
+/**
+ * Códigos estables del campo {@code codigo} de las respuestas de error (catálogo §5.4 del documento semilla).
+ */
+public enum CodigoError {
+
+    VALIDACION(HttpStatus.UNPROCESSABLE_ENTITY, "Datos inválidos"),
+    JSON_INVALIDO(HttpStatus.BAD_REQUEST, "Cuerpo mal formado"),
+    TELEFONO_INVALIDO(HttpStatus.UNPROCESSABLE_ENTITY, "Teléfono inválido"),
+    CUIL_INVALIDO(HttpStatus.UNPROCESSABLE_ENTITY, "CUIL inválido"),
+    CONSENTIMIENTO_REQUERIDO(HttpStatus.UNPROCESSABLE_ENTITY, "Falta el consentimiento de precalificación"),
+    CLAVE_SERVICIO_INVALIDA(HttpStatus.UNAUTHORIZED, "Clave de servicio inválida"),
+    CLIENTE_NO_ENCONTRADO(HttpStatus.NOT_FOUND, "Cliente no encontrado"),
+    CLIENTE_ANONIMIZADO(HttpStatus.GONE, "Cliente anonimizado"),
+    EMAIL_EN_USO(HttpStatus.CONFLICT, "El email ya pertenece a otro cliente"),
+    PRECONDICION_REQUERIDA(HttpStatus.PRECONDITION_REQUIRED, "Falta If-Match"),
+    VERSION_DESACTUALIZADA(HttpStatus.PRECONDITION_FAILED, "Versión desactualizada"),
+    CONFIRMACION_INVALIDA(HttpStatus.UNPROCESSABLE_ENTITY, "Confirmación inválida"),
+    /** Errores 4xx que resuelve Spring MVC y no están en el catálogo (método no permitido, ruta inexistente, etc.). */
+    SOLICITUD_INVALIDA(HttpStatus.BAD_REQUEST, "Solicitud inválida"),
+    ERROR_INTERNO(HttpStatus.INTERNAL_SERVER_ERROR, "Error interno");
+
+    private final HttpStatus status;
+    private final String titulo;
+
+    CodigoError(HttpStatus status, String titulo) {
+        this.status = status;
+        this.titulo = titulo;
+    }
+
+    public HttpStatus status() {
+        return status;
+    }
+
+    public String titulo() {
+        return titulo;
+    }
+
+    /** {@code CLIENTE_NO_ENCONTRADO} → {@code cliente-no-encontrado}, usado en el {@code type} del ProblemDetail. */
+    public String slug() {
+        return name().toLowerCase(Locale.ROOT).replace('_', '-');
+    }
+}

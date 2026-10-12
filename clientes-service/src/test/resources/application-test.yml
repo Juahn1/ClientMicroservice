@@ -1,0 +1,26 @@
+clientes:
+  seguridad:
+    # Claves FICTICIAS y fijas, solo para tests.
+    clave-leads: solo-test-clave-de-servicio-leads-0001
+    clave-calificacion: solo-test-clave-de-servicio-calificacion-0001
+  cuil:
+    # Claves FICTICIAS y fijas, solo para tests.
+    clave-cifrado: c29sby10ZXN0LWNsYXZlLWNpZnJhZG8tY3VpbC0zMmI=
+    clave-hash: c29sby10ZXN0LWNsYXZlLWhtYWMtZGVsLWN1aWwtMzJi
+  # Valores cortos para que los tests de degradación sean rápidos (design D10 del change 05).
+  situacion-crediticia:
+    timeout: 300ms
+  # Reintentos cortos del consumidor de lead-calificado (design D10 del change 08).
+  historial:
+    reintentos:
+      intentos: 3
+      espera-inicial: 50ms
+      multiplicador: 2
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      situacionCrediticia:
+        sliding-window-size: 4
+        minimum-number-of-calls: 4
+        wait-duration-in-open-state: 500ms

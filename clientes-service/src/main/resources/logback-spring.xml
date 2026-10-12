@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <conversionRule conversionWord="mask"
+                    converterClass="com.uade.crm.clientes.config.EnmascararDatosPersonalesConverter"/>
+
+    <!-- Mensaje y excepción pasan por %mask; %nopex evita que logback agregue la excepción sin enmascarar.
+         %nopex va al principio porque logback no reconoce una conversión pegada al ")" de un composite. -->
+    <property name="PATRON"
+              value="%nopex%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p [%X{correlationId:-}] [%X{usuario:-}] %logger{36} - %mask(%m%n%ex)"/>
+
+    <appender name="CONSOLA" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>${PATRON}</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLA"/>
+    </root>
+</configuration>
