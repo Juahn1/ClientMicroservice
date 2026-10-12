@@ -1,5 +1,7 @@
 server:
-  port: 8082
+  # En Render el web service debe escuchar en $PORT (Render lo inyecta); local y
+  # docker-compose no lo definen, así que se mantiene 8082.
+  port: ${PORT:8082}
 
 spring:
   application:
