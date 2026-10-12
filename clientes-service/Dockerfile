@@ -18,6 +18,9 @@ RUN apt-get update \
     && useradd --system --uid 10001 clientes
 WORKDIR /app
 COPY --from=build /build/clientes-service/target/clientes-service-*.jar app.jar
+# CA pública de Aiven para el truststore de Kafka (ssl.truststore.type=PEM).
+# El contexto de build es la raíz del repo (ver comando docker build arriba).
+COPY clientes-service/ca.pem /app/ca.pem
 USER clientes
 EXPOSE 8082
 ENV SPRING_PROFILES_ACTIVE=docker

@@ -33,9 +33,8 @@ spring:
   # demore la respuesta HTTP, porque la publicación corre después del commit en el hilo del request.
   kafka:
     ssl:
-      trust-store-location: file:client.truststore.jks
-      trust-store-password: ${KAFKA_TRUSTSTORE_PASSWORD}
-      trust-store-type: JKS
+      trust-store-location: file:ca.pem
+      trust-store-type: PEM
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       # El valor se serializa como JSON con el ObjectMapper de la aplicación y sin headers de tipo
