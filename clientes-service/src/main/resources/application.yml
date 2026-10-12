@@ -21,9 +21,14 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+    properties:
+      hibernate:
+        default_schema: clientes
   flyway:
     enabled: true
     locations: classpath:db/migration
+    schemas: clientes
+    default-schema: clientes
   # Productor de eventos de integración (design D8 y D11). Los timeouts cortos evitan que un broker caído
   # demore la respuesta HTTP, porque la publicación corre después del commit en el hilo del request.
   kafka:
