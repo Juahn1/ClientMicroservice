@@ -68,7 +68,7 @@ class NoContactarApiTest {
                 .andExpect(jsonPath("$.contenido[0].id").value(id.toString()))
                 .andExpect(jsonPath("$.contenido[0].noContactar").value(true));
 
-        JsonNode sobre = json.readTree(mensajes.esperar("cliente-actualizado", id, 1).getFirst().value());
+        JsonNode sobre = json.readTree(mensajes.esperarEvento("ClienteActualizado", id, 1).getFirst().value());
         assertThat(sobre.get("payload").get("campos")).extracting(JsonNode::asText).containsExactly("NO_CONTACTAR");
     }
 
@@ -81,7 +81,7 @@ class NoContactarApiTest {
         mvc.perform(put("/clientes/{id}/no-contactar", id)).andExpect(status().isNoContent());
 
         assertThat(fecha(id)).isEqualTo(desde);
-        assertThat(mensajes.ninguno("cliente-actualizado", id)).hasSize(1);
+        assertThat(mensajes.ningunoEvento("ClienteActualizado", id)).hasSize(1);
     }
 
     @Test
@@ -94,7 +94,7 @@ class NoContactarApiTest {
         mvc.perform(get("/clientes/{id}", id))
                 .andExpect(jsonPath("$.noContactar").value(false))
                 .andExpect(jsonPath("$.noContactarDesde").value(nullValue()));
-        assertThat(mensajes.esperar("cliente-actualizado", id, 2)).hasSize(2);
+        assertThat(mensajes.esperarEvento("ClienteActualizado", id, 2)).hasSize(2);
     }
 
     @Test
@@ -104,7 +104,7 @@ class NoContactarApiTest {
         mvc.perform(delete("/clientes/{id}/no-contactar", id)).andExpect(status().isNoContent());
 
         mvc.perform(get("/clientes/{id}", id)).andExpect(header().string("ETag", "W/\"0\""));
-        assertThat(mensajes.ninguno("cliente-actualizado", id)).isEmpty();
+        assertThat(mensajes.ningunoEvento("ClienteActualizado", id)).isEmpty();
     }
 
     @Test
@@ -140,7 +140,7 @@ class NoContactarApiTest {
                 .andExpect(jsonPath("$.noContactar").value(false))
                 .andExpect(jsonPath("$.noContactarDesde").value(nullValue()))
                 .andExpect(jsonPath("$.contactosRegistrados").value(2));
-        assertThat(mensajes.ninguno("cliente-actualizado", id)).hasSize(1);
+        assertThat(mensajes.ningunoEvento("ClienteActualizado", id)).hasSize(1);
     }
 
     private String fecha(UUID id) throws Exception {

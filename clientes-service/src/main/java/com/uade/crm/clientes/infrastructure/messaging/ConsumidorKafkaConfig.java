@@ -19,7 +19,7 @@ import org.springframework.util.backoff.BackOff;
 import org.springframework.util.backoff.FixedBackOff;
 
 /**
- * Qué pasa con un mensaje de {@code lead-calificado} que no se pudo registrar (design D5 del change 08). Spring Boot
+ * Qué pasa con un comando {@code RegistrarCalificacion} que no se pudo registrar (design D5 del change 08). Spring Boot
  * conecta este {@code CommonErrorHandler} a la fábrica de listeners.
  *
  * <ul>
@@ -47,7 +47,7 @@ class ConsumidorKafkaConfig implements DisposableBean {
     DefaultErrorHandler manejadorErroresHistorial(ProducerFactory<?, ?> productores, ClientesProperties properties) {
         productorFallidos = new DefaultKafkaProducerFactory<>(productores.getConfigurationProperties(),
                 new StringSerializer(), new ByteArraySerializer());
-        String topicoFallidos = properties.kafka().topicos().leadCalificadoDlt();
+        String topicoFallidos = properties.kafka().topicos().dlt();
         // Partición -1: decide Kafka. Por defecto se usa la del mensaje original, y no sabemos cuántas tiene el tópico
         // de calificacion.
         DeadLetterPublishingRecoverer recuperador = new DeadLetterPublishingRecoverer(

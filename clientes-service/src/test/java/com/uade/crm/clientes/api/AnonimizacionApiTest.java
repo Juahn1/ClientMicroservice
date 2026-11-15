@@ -157,7 +157,7 @@ class AnonimizacionApiTest {
         assertThat(jdbc.queryForObject("SELECT cuil_hash IS NOT NULL FROM cliente WHERE id = ?", Boolean.class, id))
                 .isTrue();
         assertThat(situacionesGuardadas(id)).isEqualTo(1);
-        assertThat(mensajes.ninguno("cliente-anonimizado", id)).isEmpty();
+        assertThat(mensajes.ningunoEvento("ClienteAnonimizado", id)).isEmpty();
     }
 
     /** Change 08: "Historial de calificaciones eliminado". */
@@ -194,7 +194,7 @@ class AnonimizacionApiTest {
 
         assertThat(jdbc.queryForObject("SELECT estado FROM cliente WHERE id = ?", String.class, id)).isEqualTo("ACTIVO");
         assertThat(calificaciones(id)).isEqualTo(1);
-        assertThat(mensajes.ninguno("cliente-anonimizado", id)).isEmpty();
+        assertThat(mensajes.ningunoEvento("ClienteAnonimizado", id)).isEmpty();
     }
 
     @Test
@@ -207,7 +207,7 @@ class AnonimizacionApiTest {
 
         assertThat(jdbc.queryForObject("SELECT anonimizado_en FROM cliente WHERE id = ?", Object.class, id))
                 .isEqualTo(anonimizadoEn);
-        assertThat(mensajes.ninguno("cliente-anonimizado", id)).hasSize(1);
+        assertThat(mensajes.ningunoEvento("ClienteAnonimizado", id)).hasSize(1);
     }
 
     @Test
@@ -251,7 +251,7 @@ class AnonimizacionApiTest {
         mvc.perform(get("/clientes/{id}", id))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value("martina@gmail.com"));
-        assertThat(mensajes.ninguno("cliente-anonimizado", id)).isEmpty();
+        assertThat(mensajes.ningunoEvento("ClienteAnonimizado", id)).isEmpty();
     }
 
     @Test
@@ -273,7 +273,7 @@ class AnonimizacionApiTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{ \"email\": \"martina@gmail.com\" }"))
                 .andExpect(status().isNoContent());
 
-        String mensaje = mensajes.esperar("cliente-anonimizado", id, 1).getFirst().value();
+        String mensaje = mensajes.esperarEvento("ClienteAnonimizado", id, 1).getFirst().value();
         JsonNode sobre = json.readTree(mensaje);
         assertThat(sobre.get("eventType").asText()).isEqualTo("ClienteAnonimizado");
         assertThat(sobre.get("correlationId").asText()).isEqualTo("baja-1");

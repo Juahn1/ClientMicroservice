@@ -159,9 +159,9 @@ class EdicionClienteApiTest {
         editar(mixta, "W/\"0\"", "{ \"apellido\": \"Gómez\", \"telefonoAlternativo\": \"11 8765-4321\" }")
                 .andExpect(status().isOk());
 
-        JsonNode sobre = json.readTree(mensajes.esperar("cliente-actualizado", mixta, 1).getFirst().value());
+        JsonNode sobre = json.readTree(mensajes.esperarEvento("ClienteActualizado", mixta, 1).getFirst().value());
         assertThat(sobre.at("/payload/campos").toString()).isEqualTo("[\"APELLIDO\"]");
-        assertThat(mensajes.ninguno("cliente-actualizado", soloAlternativo)).isEmpty();
+        assertThat(mensajes.ningunoEvento("ClienteActualizado", soloAlternativo)).isEmpty();
     }
 
     /** clientes-eventos, escenario "Recontacto": registrar el CUIL o marcar una revisión no publica eventos. */
@@ -175,7 +175,7 @@ class EdicionClienteApiTest {
         mvc.perform(get("/clientes/{id}", id))
                 .andExpect(jsonPath("$.cuil").value("XX-XXXX1222-X"))
                 .andExpect(jsonPath("$.motivoRevision").value("CUIL_DISTINTO"));
-        assertThat(mensajes.ninguno("cliente-actualizado", id)).isEmpty();
+        assertThat(mensajes.ningunoEvento("ClienteActualizado", id)).isEmpty();
     }
 
     @Test
@@ -236,7 +236,7 @@ class EdicionClienteApiTest {
                 .andExpect(status().isOk())
                 .andExpect(header().string("ETag", "W/\"0\""));
 
-        assertThat(mensajes.ninguno("cliente-actualizado", id)).isEmpty();
+        assertThat(mensajes.ningunoEvento("ClienteActualizado", id)).isEmpty();
     }
 
     @Test
@@ -314,7 +314,7 @@ class EdicionClienteApiTest {
         editar(id, "W/\"0\"", "{ \"email\": \"martu@gmail.com\", \"nombre\": \"Martu\" }")
                 .andExpect(status().isOk());
 
-        JsonNode sobre = json.readTree(mensajes.esperar("cliente-actualizado", id, 1).getFirst().value());
+        JsonNode sobre = json.readTree(mensajes.esperarEvento("ClienteActualizado", id, 1).getFirst().value());
         assertThat(sobre.get("correlationId").asText()).isEqualTo("edicion-1");
         assertThat(sobre.get("payload").get("campos")).extracting(JsonNode::asText)
                 .containsExactly("NOMBRE", "EMAIL");

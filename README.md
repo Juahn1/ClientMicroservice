@@ -59,8 +59,8 @@ a los demás servicios lo que necesitan saber del cliente.
 | (Python)  |   X-Api-Key      |   (este servicio)    |        X-Api-Key           |               |
 +-----+-----+                  +--+---------------+---+                            +-------+-------+
       ^                           |               ^                                        |
-      |  cliente-actualizado      |               |  lead-calificado                       |
-      |  cliente-anonimizado      v               |                                        |
+      |  crm.eventos (cliente-     |               |  crm.comandos (RegistrarCalificacion)  |
+      |  actualizado/anonimizado) v               |  del orquestador                       |
       +---------------------- [ Kafka ] ----------+----------------------------------------+
                                   |
                                   v
@@ -213,13 +213,14 @@ conservan el ID, la provincia, los canales, el contador y las fechas: sirven par
 - **La caché vive en la base**, así que la comparten todas las réplicas. Un `NO_DISPONIBLE` no se guarda: la próxima
   consulta vuelve a intentar la fuente.
 
-### 3.5 Historial de calificaciones (consume `lead-calificado`)
+### 3.5 Historial de calificaciones (atiende el comando `RegistrarCalificacion`)
 
 ```
- lead-calificado (clave leadId)
+ crm.comandos (clave leadId)      el orquestador lo publica al llegar LeadCalificado
       |
       v
- LeadCalificadoListener            correlationId en el MDC por mensaje
+ RegistrarCalificacionListener    ignora lo que no es RegistrarCalificacion con destino clientes;
+      |                            correlationId en el MDC por mensaje
       |
       v
  LeadCalificadoTraductor           bytes -> CalificacionHistorica. Acepta JSON plano o sobre común;
@@ -232,8 +233,8 @@ conservan el ID, la provincia, los canales, el contador y las fechas: sirven par
       '-- 0 filas -> descartada: duplicado (DEBUG) | cliente anonimizado (INFO) | inexistente (WARN)
 
  Errores (DefaultErrorHandler):
-   MensajeInvalidoException -----------------------------> lead-calificado.clientes.DLT
-   otra excepción -> reintentos 2s, 4s, 8s, 16s, 32s ----> lead-calificado.clientes.DLT
+   MensajeInvalidoException -----------------------------> crm.dlt
+   otra excepción -> reintentos 2s, 4s, 8s, 16s, 32s ----> crm.dlt
    (en ambos casos: WARN con partición/offset/clave, commit del offset y sigue con el próximo mensaje)
 ```
 
@@ -260,10 +261,10 @@ responde, la operación ya confirmada no se revierte y la falla queda en el log 
 | Entrada | REST `PATCH`, `PUT/DELETE no-contactar`, `POST anonimizacion` | front (personal) | Escrituras del personal | `If-Match` en `PATCH`; email de confirmación en la anonimización |
 | Entrada | REST `GET /clientes/{id}/situacion-crediticia` | `calificacion` | Situación crediticia | `X-Api-Key` de `calificacion` |
 | Entrada | REST `GET /clientes/{id}/historial` | front | Historial de calificaciones | — |
-| Entrada | Kafka `lead-calificado` | `calificacion` | Cada cálculo o corrección de una calificación | Validación del mensaje y tópico de fallidos |
-| Salida | Kafka `cliente-actualizado` | `leads` | Qué campos de la ficha cambiaron | Sin datos personales |
-| Salida | Kafka `cliente-anonimizado` | `leads` | Qué cliente se anonimizó | Sin datos personales |
-| Salida | Kafka `lead-calificado.clientes.DLT` | operación (manual) | Mensajes de `lead-calificado` que no se pudieron registrar | Interno |
+| Entrada | Kafka `crm.comandos`, comando `RegistrarCalificacion` | orquestador | Cada cálculo o corrección de una calificación (el payload es el de `LeadCalificado`) | Validación del mensaje y tópico de fallidos |
+| Salida | Kafka `crm.eventos`, evento `ClienteActualizado` | orquestador | Qué campos de la ficha cambiaron | Sin datos personales |
+| Salida | Kafka `crm.eventos`, evento `ClienteAnonimizado` | orquestador | Qué cliente se anonimizó | Sin datos personales |
+| Salida | Kafka `crm.dlt` | operación (manual) | Comandos que no se pudieron registrar | Interno |
 | Salida (interna) | Puerto `SituacionCrediticiaPort` | fuente simulada (BCRA en la Segunda Parte) | CUIL descifrado, solo en memoria | Timeout y circuit breaker |
 
 Headers transversales:
@@ -458,12 +459,12 @@ GET /clientes/{id}/historial
 
 ## 6. Eventos (Kafka)
 
-### 6.1 Que publica `clientes` (para `leads`)
+### 6.1 Que publica `clientes` (en `crm.eventos`)
 
 | Tópico | Evento | Cuándo | Payload |
 | --- | --- | --- | --- |
-| `cliente-actualizado` | `ClienteActualizado` | Una edición o la marca no contactar cambian algo | `{ clienteId, campos: [NOMBRE, APELLIDO, EMAIL, TELEFONO, PROVINCIA, LOCALIDAD, NO_CONTACTAR] }` |
-| `cliente-anonimizado` | `ClienteAnonimizado` | Se anonimiza un cliente | `{ clienteId }` |
+| `crm.eventos` | `ClienteActualizado` | Una edición o la marca no contactar cambian algo | `{ clienteId, campos: [NOMBRE, APELLIDO, EMAIL, TELEFONO, PROVINCIA, LOCALIDAD, NO_CONTACTAR] }` |
+| `crm.eventos` | `ClienteAnonimizado` | Se anonimiza un cliente | `{ clienteId }` |
 
 ```json
 {
@@ -486,11 +487,11 @@ GET /clientes/{id}/historial
 - **Se publican después del commit.** No hay outbox en la Primera Parte: si el broker falla, la falla queda en el log y
   `leads` puede resincronizar con `GET /clientes/{id}`.
 
-### 6.2 Que consume `clientes` (de `calificacion`)
+### 6.2 Que consume `clientes` (comandos del orquestador)
 
 | Tópico | Grupo | Clave | Para qué |
 | --- | --- | --- | --- |
-| `lead-calificado` | `clientes-historial` | `leadId` | Registrar cada calificación en el historial del cliente |
+| `crm.comandos` | `clientes-historial` | `leadId` | Atender `RegistrarCalificacion` (con `destino: clientes`): registrar cada calificación en el historial del cliente. Los comandos de otros servicios se ignoran |
 
 ```json
 { "leadId": "550e8400-e29b-41d4-a716-446655440000", "clienteId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
@@ -500,15 +501,15 @@ GET /clientes/{id}/historial
 
 - **Formato:** obligatorios `leadId`, `clienteId`, `puntos`, `nivel`, `origen` y `fecha`; opcionales `observacion` y
   `motivos`. Los campos desconocidos se ignoran. También acepta el evento envuelto en el sobre común, dentro de
-  `payload` y con `eventType` = `LeadCalificado`.
+  `payload`, con `eventType` = `RegistrarCalificacion` y `destino` = `clientes` (es lo que publica el orquestador).
 - **`fecha`:** si no indica zona, se interpreta en `clientes.historial.zona-fecha` (Buenos Aires por defecto); si trae
   offset o `Z`, se respeta.
 - **Primera lectura:** desde el principio del tópico (`auto-offset-reset: earliest`), así que carga lo que
   `calificacion` ya había publicado.
-- **Tópico propio:** `clientes` no crea `lead-calificado`, porque es de `calificacion`.
-- **Mensajes que no se pueden registrar:** van a `lead-calificado.clientes.DLT` con su contenido original, como se
-  describe en [3.5](#35-historial-de-calificaciones-consume-lead-calificado). El reproceso es manual: republicar el
-  mensaje en `lead-calificado` (es seguro por la idempotencia).
+- **Tópicos:** `clientes` declara los tres del ecosistema (`crm.comandos`, `crm.eventos` y `crm.dlt`) y los crea si no existen. Contrato: `docs/08-contrato-tres-topicos.md` del orquestador.
+- **Mensajes que no se pueden registrar:** van a `crm.dlt` con su contenido original, como se describe en
+  [3.5](#35-historial-de-calificaciones-atiende-el-comando-registrarcalificacion). El reproceso es manual: republicar
+  el comando en `crm.comandos` (es seguro por la idempotencia).
 
 ---
 
@@ -647,7 +648,7 @@ conocida.
 | `situacion-crediticia.vigencia` / `.timeout` | `30d` / `2s` | Caché y tiempo máximo de la fuente |
 | `situacion-crediticia.simulado.demora` / `.forzar-no-disponible` | `0ms` / `false` | Para simular una fuente lenta o caída |
 | `paginacion.tamanio-por-defecto` / `.tamanio-maximo` | `20` / `50` | Búsqueda |
-| `kafka.topicos.*` | `cliente-actualizado`, `cliente-anonimizado`, `lead-calificado`, `lead-calificado.clientes.DLT` | Nombres de los tópicos |
+| `kafka.topicos.*` | `crm.comandos`, `crm.eventos`, `crm.dlt` (variables `KAFKA_TOPICO_COMANDOS`, `KAFKA_TOPICO_EVENTOS`, `KAFKA_TOPICO_DLT`) | Nombres de los tópicos |
 | `kafka.particiones` / `.replicas` | `3` / `1` | Al crear los tópicos propios |
 | `historial.zona-fecha` | Buenos Aires | Ver variable `CLIENTES_HISTORIAL_ZONA_FECHA` |
 | `historial.reintentos.intentos` / `.espera-inicial` / `.multiplicador` | `5` / `2s` / `2` | Reintentos del consumidor antes del DLT (unos 62 s) |
@@ -702,22 +703,19 @@ curl -i http://localhost:8082/clientes/{id}/historial
 
 ### 12.3 Probar el historial sin `calificacion`
 
-`clientes` no crea `lead-calificado`, así que primero hay que crearlo. Después se publica un evento a mano con la clave
+Se publica a mano el comando `RegistrarCalificacion` en `crm.comandos` (como lo haría el orquestador), con la clave
 `leadId` y el `clienteId` de un cliente dado de alta:
 
 ```bash
-docker exec crm-clientes-kafka-1 /opt/kafka/bin/kafka-topics.sh --create --if-not-exists \
-       --topic lead-calificado --partitions 3 --bootstrap-server localhost:9092
-
-echo '550e8400-e29b-41d4-a716-446655440000|{"leadId":"550e8400-e29b-41d4-a716-446655440000","clienteId":"<clienteId>","puntos":60,"nivel":"MUY_POTABLE","origen":"AUTOMATICA","fecha":"2026-10-11T15:30:00","motivos":["[REGLA_COBERTURA]: +60"]}' \
+echo '550e8400-e29b-41d4-a716-446655440000|{"eventId":"<uuid>","eventType":"RegistrarCalificacion","version":1,"occurredAt":"2026-10-11T18:30:01Z","correlationId":"<uuid>","destino":"clientes","payload":{"leadId":"550e8400-e29b-41d4-a716-446655440000","clienteId":"<clienteId>","puntos":60,"nivel":"MUY_POTABLE","origen":"AUTOMATICA","fecha":"2026-10-11T15:30:00","motivos":["[REGLA_COBERTURA]: +60"]}}' \
   | docker exec -i crm-clientes-kafka-1 /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 \
-       --topic lead-calificado --property parse.key=true --property key.separator='|'
+       --topic crm.comandos --property parse.key=true --property key.separator='|'
 
 curl http://localhost:8082/clientes/<clienteId>/historial
 
 # Mensajes que fueron al tópico de fallidos
 docker exec crm-clientes-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \
-       --topic lead-calificado.clientes.DLT --from-beginning --property print.key=true --timeout-ms 5000
+       --topic crm.dlt --from-beginning --property print.key=true --timeout-ms 5000
 ```
 
 > En Git Bash (Windows), anteponer `MSYS_NO_PATHCONV=1` a los `docker exec`. Si no, Git Bash convierte

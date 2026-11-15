@@ -32,7 +32,7 @@ class PublicadorEventosKafkaTest {
         UUID id = UUID.randomUUID();
         when(kafka.send(anyString(), anyString(), any())).thenThrow(new TimeoutException("sin metadata"));
 
-        assertThatNoException().isThrownBy(() -> publicador.publicar("cliente-anonimizado", id, evento(id)));
+        assertThatNoException().isThrownBy(() -> publicador.publicar("crm.eventos", id, evento(id)));
 
         assertThat(salida.getOut()).contains("Falló la publicación de ClienteAnonimizado del cliente " + id);
     }
@@ -43,7 +43,7 @@ class PublicadorEventosKafkaTest {
         when(kafka.send(anyString(), anyString(), any()))
                 .thenReturn(CompletableFuture.failedFuture(new TimeoutException("delivery timeout")));
 
-        publicador.publicar("cliente-anonimizado", id, evento(id));
+        publicador.publicar("crm.eventos", id, evento(id));
 
         assertThat(salida.getOut()).contains("Falló la publicación de ClienteAnonimizado del cliente " + id);
     }
