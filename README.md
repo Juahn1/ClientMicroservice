@@ -671,8 +671,11 @@ docker compose -f infra/docker-compose.yml up --build
 
 El servicio queda en `http://localhost:8082`: Swagger UI en `/swagger-ui.html` y estado en `/actuator/health`.
 
-Para desarrollo sin el contenedor del servicio: `mvn -pl clientes-service -am spring-boot:run` (perfil `local`), con
-PostgreSQL y Kafka de `infra/docker-compose.yml`.
+Para desarrollo sin el contenedor del servicio: `./mvnw -pl clientes-service -am spring-boot:run` (Windows:
+`mvnw.cmd ...`; perfil `local`), con PostgreSQL y Kafka de `infra/docker-compose.yml`.
+
+El repo trae el **Maven Wrapper** (`mvnw`): no hace falta tener Maven instalado, solo JDK 21. La primera vez descarga
+Maven 3.9.16 (verificando su SHA-256) en `~/.m2/wrapper`. La versión se define en `.mvn/wrapper/maven-wrapper.properties`.
 
 ### 12.2 Probar los endpoints
 
@@ -725,7 +728,7 @@ docker exec crm-clientes-kafka-1 /opt/kafka/bin/kafka-console-consumer.sh --boot
 ## 13. Tests
 
 ```bash
-mvn verify      # unitarios + integración (Testcontainers: necesita Docker)
+./mvnw verify   # unitarios + integración (Testcontainers: necesita Docker). Windows: mvnw.cmd verify
 ```
 
 - **Unitarios sin Spring:** dominio (invariantes del agregado, value objects y factory), traductor del evento, servicios

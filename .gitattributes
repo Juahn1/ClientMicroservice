@@ -1,1 +1,4 @@
 *.sh text eol=lf
+# Scripts del Maven Wrapper: el de Linux/macOS siempre con LF, el de Windows con CRLF.
+/mvnw text eol=lf
+*.cmd text eol=crlf
