@@ -59,7 +59,7 @@ class LeadCalificadoTraductorTest {
     @Test
     void traduceElSobreComun() {
         LeadCalificadoTraductor.Traducido traducido = traducir("""
-                {"eventId": "5d1e7c3a-2b4f-4a6e-9c8d-7e6f5a4b3c2d", "eventType": "LeadCalificado", "version": 1,
+                {"eventId": "5d1e7c3a-2b4f-4a6e-9c8d-7e6f5a4b3c2d", "eventType": "RegistrarCalificacion", "version": 1,
                  "occurredAt": "2026-10-11T18:30:01Z", "correlationId": "abc-123",
                  "payload": %s}""".formatted(EJEMPLO));
 

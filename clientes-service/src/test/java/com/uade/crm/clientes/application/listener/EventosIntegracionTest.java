@@ -45,7 +45,7 @@ class EventosIntegracionTest {
         transaccion.executeWithoutResult(estado -> eventos.publishEvent(new ClienteActualizadoEvento(
                 id, Set.of(CampoCliente.EMAIL, CampoCliente.NOMBRE), AHORA, "abc-123")));
 
-        ConsumerRecord<String, String> mensaje = mensajes.esperar("cliente-actualizado", id, 1).getFirst();
+        ConsumerRecord<String, String> mensaje = mensajes.esperarEvento("ClienteActualizado", id, 1).getFirst();
         JsonNode sobre = json.readTree(mensaje.value());
         assertThat(mensaje.key()).isEqualTo(id.toString());
         assertThat(mensaje.headers().lastHeader("__TypeId__")).isNull();
@@ -67,7 +67,7 @@ class EventosIntegracionTest {
         transaccion.executeWithoutResult(estado ->
                 eventos.publishEvent(new ClienteAnonimizadoEvento(id, AHORA, "abc-456")));
 
-        JsonNode sobre = json.readTree(mensajes.esperar("cliente-anonimizado", id, 1).getFirst().value());
+        JsonNode sobre = json.readTree(mensajes.esperarEvento("ClienteAnonimizado", id, 1).getFirst().value());
         assertThat(sobre.get("eventType").asText()).isEqualTo("ClienteAnonimizado");
         assertThat(sobre.get("correlationId").asText()).isEqualTo("abc-456");
         assertThat(sobre.get("payload").get("clienteId").asText()).isEqualTo(id.toString());
@@ -83,6 +83,6 @@ class EventosIntegracionTest {
             estado.setRollbackOnly();
         });
 
-        assertThat(mensajes.ninguno("cliente-actualizado", id)).isEmpty();
+        assertThat(mensajes.ningunoEvento("ClienteActualizado", id)).isEmpty();
     }
 }

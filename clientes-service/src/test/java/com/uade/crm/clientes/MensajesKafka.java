@@ -26,6 +26,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class MensajesKafka {
 
+    /** Los eventos del servicio salen todos por este tópico (perfil de test). */
+    private static final String TOPICO_EVENTOS = "crm.eventos";
+
     private final String bootstrap;
     private KafkaProducer<String, String> productor;
 
@@ -63,12 +66,27 @@ public class MensajesKafka {
         return leer(topico, clave, esperados, Duration.ofSeconds(15));
     }
 
+    /** Como {@link #esperar}, sobre {@code crm.eventos}, y solo los eventos de ese {@code eventType}. */
+    public List<ConsumerRecord<String, String>> esperarEvento(String tipo, UUID clave, int esperados) {
+        return leer(TOPICO_EVENTOS, clave, esperados, Duration.ofSeconds(15), tipo);
+    }
+
+    /** Como {@link #ninguno}, sobre {@code crm.eventos}, y solo los eventos de ese {@code eventType}. */
+    public List<ConsumerRecord<String, String>> ningunoEvento(String tipo, UUID clave) {
+        return leer(TOPICO_EVENTOS, clave, Integer.MAX_VALUE, Duration.ofSeconds(4), tipo);
+    }
+
     /** Lee durante unos segundos y devuelve todo lo que haya con esa clave; sirve para verificar ausencia. */
     public List<ConsumerRecord<String, String>> ninguno(String topico, UUID clave) {
         return leer(topico, clave, Integer.MAX_VALUE, Duration.ofSeconds(4));
     }
 
     private List<ConsumerRecord<String, String>> leer(String topico, UUID clave, int esperados, Duration espera) {
+        return leer(topico, clave, esperados, espera, null);
+    }
+
+    private List<ConsumerRecord<String, String>> leer(String topico, UUID clave, int esperados, Duration espera,
+            String tipoEvento) {
         Map<String, Object> config = Map.of(
                 ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrap,
                 ConsumerConfig.GROUP_ID_CONFIG, "test-" + UUID.randomUUID(),
@@ -81,12 +99,16 @@ public class MensajesKafka {
             Instant limite = Instant.now().plus(espera);
             while (Instant.now().isBefore(limite) && encontrados.size() < esperados) {
                 for (ConsumerRecord<String, String> mensaje : consumidor.poll(Duration.ofMillis(250))) {
-                    if (clave.toString().equals(mensaje.key())) {
+                    if (clave.toString().equals(mensaje.key()) && esDelTipo(mensaje, tipoEvento)) {
                         encontrados.add(mensaje);
                     }
                 }
             }
         }
         return encontrados;
+    }
+
+    private static boolean esDelTipo(ConsumerRecord<String, String> mensaje, String tipoEvento) {
+        return tipoEvento == null || mensaje.value().contains("\"eventType\":\"" + tipoEvento + "\"");
     }
 }

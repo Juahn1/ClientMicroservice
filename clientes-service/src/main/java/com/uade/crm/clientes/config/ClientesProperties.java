@@ -140,17 +140,16 @@ public record ClientesProperties(
     }
 
     /**
-     * Tópicos que publica y consume el servicio (design D8 del change 03 y D9 del change 08). Particiones y réplicas
-     * se usan al crear los tópicos propios, incluido el de mensajes fallidos; {@code leadCalificado} es de
-     * {@code calificacion} y el servicio no lo crea.
+     * Los tres tópicos del ecosistema (docs/08-contrato-tres-topicos.md del orquestador): {@code comandos} es de donde
+     * el servicio recibe las órdenes del orquestador, {@code eventos} donde publica sus hechos y {@code dlt} adonde
+     * manda el comando que no pudo procesar. Particiones y réplicas se usan al crear los tópicos.
      */
     public record Kafka(@Valid @NotNull Topicos topicos, @Positive int particiones, @Positive int replicas) {
 
         public record Topicos(
-                @NotBlank String clienteActualizado,
-                @NotBlank String clienteAnonimizado,
-                @NotBlank String leadCalificado,
-                @NotBlank String leadCalificadoDlt) {
+                @NotBlank String comandos,
+                @NotBlank String eventos,
+                @NotBlank String dlt) {
         }
     }
 

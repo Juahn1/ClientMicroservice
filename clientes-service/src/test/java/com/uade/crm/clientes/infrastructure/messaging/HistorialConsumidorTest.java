@@ -41,7 +41,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * El consumidor de {@code lead-calificado} contra Kafka y PostgreSQL reales (capability
+ * El consumidor del comando {@code RegistrarCalificacion} contra Kafka y PostgreSQL reales (capability
  * clientes-historial-calificaciones, design D10 del change 08).
  *
  * <p>Los mensajes de un mismo {@code leadId} van a la misma partición y se procesan en orden. Para comprobar que un
@@ -89,8 +89,8 @@ class HistorialConsumidorTest {
     @BeforeEach
     void preparar() {
         limpiar();
-        topico = properties.kafka().topicos().leadCalificado();
-        topicoFallidos = properties.kafka().topicos().leadCalificadoDlt();
+        topico = properties.kafka().topicos().comandos();
+        topicoFallidos = properties.kafka().topicos().dlt();
     }
 
     /** También corre antes de cada test (desde preparar): las demás clases del contexto compartido dejan sus datos. */
@@ -176,16 +176,64 @@ class HistorialConsumidorTest {
         UUID lead = UUID.randomUUID();
         Map<String, Object> sobre = new LinkedHashMap<>();
         sobre.put("eventId", UUID.randomUUID().toString());
-        sobre.put("eventType", "LeadCalificado");
+        sobre.put("eventType", "RegistrarCalificacion");
         sobre.put("version", 1);
         sobre.put("occurredAt", "2026-10-11T18:30:01Z");
         sobre.put("correlationId", "abc-123");
+        sobre.put("destino", "clientes");
         sobre.put("payload", evento(lead, cliente, "AUTOMATICA", "2026-10-11T15:30:00", 60, "MUY_POTABLE", null,
                 List.of()));
 
-        publicar(lead, sobre);
+        mensajes.publicar(topico, lead, escribir(sobre));
 
         assertThat(esperarCalificaciones(cliente, 1).get(0).leadId()).isEqualTo(lead);
+    }
+
+    // Requirement: Comandos de otros servicios (todos leen crm.comandos)
+
+    @Test
+    void ignoraLosComandosDeOtrosServicios() {
+        UUID cliente = cliente("martina@gmail.com");
+        UUID lead = UUID.randomUUID();
+        Map<String, Object> deOtro = comando(evento(lead, cliente, "AUTOMATICA", "2026-10-11T15:30:00", 60,
+                "MUY_POTABLE", null, List.of()));
+        deOtro.put("destino", "leads");
+        mensajes.publicar(topico, lead, escribir(deOtro));
+        // Misma clave: misma partición, así que se procesa después del ajeno.
+        publicar(lead, evento(lead, cliente, "MANUAL", "2026-10-11T16:00:00", 35, "POTABLE", null, List.of()));
+
+        List<CalificacionHistorica> registradas = esperarCalificaciones(cliente, 1);
+
+        assertThat(registradas).singleElement().satisfies(c -> assertThat(c.origen()).isEqualTo("MANUAL"));
+        assertThat(mensajes.ninguno(topicoFallidos, lead)).as("lo ajeno no es un error: no va a la DLT").isEmpty();
+    }
+
+    @Test
+    void ignoraUnComandoDesconocidoParaClientes() {
+        UUID cliente = cliente("martina@gmail.com");
+        UUID lead = UUID.randomUUID();
+        Map<String, Object> desconocido = comando(evento(lead, cliente, "AUTOMATICA", "2026-10-11T15:30:00", 60,
+                "MUY_POTABLE", null, List.of()));
+        desconocido.put("eventType", "OtraCosa");
+        mensajes.publicar(topico, lead, escribir(desconocido));
+        publicar(lead, evento(lead, cliente, "MANUAL", "2026-10-11T16:00:00", 35, "POTABLE", null, List.of()));
+
+        assertThat(esperarCalificaciones(cliente, 1)).singleElement()
+                .satisfies(c -> assertThat(c.origen()).isEqualTo("MANUAL"));
+        assertThat(mensajes.ninguno(topicoFallidos, lead)).isEmpty();
+    }
+
+    @Test
+    void ignoraUnMensajeSinSobre() {
+        UUID cliente = cliente("martina@gmail.com");
+        UUID lead = UUID.randomUUID();
+        // El formato anterior (el evento plano de lead-calificado) ya no es un comando para clientes.
+        mensajes.publicar(topico, lead, escribir(evento(lead, cliente, "AUTOMATICA", "2026-10-11T15:30:00", 60,
+                "MUY_POTABLE", null, List.of())));
+        publicar(lead, evento(lead, cliente, "MANUAL", "2026-10-11T16:00:00", 35, "POTABLE", null, List.of()));
+
+        assertThat(esperarCalificaciones(cliente, 1)).singleElement()
+                .satisfies(c -> assertThat(c.origen()).isEqualTo("MANUAL"));
     }
 
     @Test
@@ -390,8 +438,8 @@ class HistorialConsumidorTest {
 
         publicar(lead, evento(lead, cliente, "AUTOMATICA", "2026-10-11T15:30:00", 60, "MUY_POTABLE", null, List.of()));
         // Misma clave: misma partición, así que se procesa después del que falla.
-        mensajes.publicar(topico, lead, escribir(evento(otroLead, cliente, "AUTOMATICA", "2026-10-11T16:00:00", 20,
-                "POTABLE", null, List.of())));
+        publicar(lead, evento(otroLead, cliente, "AUTOMATICA", "2026-10-11T16:00:00", 20, "POTABLE", null,
+                List.of()));
 
         assertThat(mensajes.esperar(topicoFallidos, lead, 1)).singleElement()
                 .satisfies(m -> assertThat(m.value()).contains("\"leadId\":\"" + lead + "\""));
@@ -446,8 +494,23 @@ class HistorialConsumidorTest {
         return evento;
     }
 
+    /** Publica el comando {@code RegistrarCalificacion} (con destino clientes) cuyo payload es el evento. */
     private void publicar(UUID clave, Map<String, Object> evento) {
-        mensajes.publicar(topico, clave, escribir(evento));
+        mensajes.publicar(topico, clave, escribir(comando(evento)));
+    }
+
+    /** El comando como lo publica el orquestador: sobre común con {@code destino} y el payload del evento. */
+    private Map<String, Object> comando(Map<String, Object> payload) {
+        Map<String, Object> sobre = new LinkedHashMap<>();
+        sobre.put("eventId", UUID.randomUUID().toString());
+        sobre.put("eventType", "RegistrarCalificacion");
+        sobre.put("version", 1);
+        sobre.put("occurredAt", "2026-10-11T18:30:01Z");
+        sobre.put("timestamp", "2026-10-11T18:30:01Z");
+        sobre.put("correlationId", UUID.randomUUID().toString());
+        sobre.put("destino", "clientes");
+        sobre.put("payload", payload);
+        return sobre;
     }
 
     private String escribir(Map<String, Object> evento) {

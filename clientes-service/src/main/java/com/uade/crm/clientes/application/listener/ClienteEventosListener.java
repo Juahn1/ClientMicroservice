@@ -35,14 +35,14 @@ public class ClienteEventosListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void clienteActualizado(ClienteActualizadoEvento evento) {
         var payload = new ClienteActualizado(evento.clienteId(), evento.campos().stream().sorted().toList());
-        publicar(topicos.clienteActualizado(), evento.clienteId(), new EventoIntegracion<>(UUID.randomUUID(),
+        publicar(topicos.eventos(), evento.clienteId(), new EventoIntegracion<>(UUID.randomUUID(),
                 ClienteActualizado.TIPO, ClienteActualizado.VERSION, evento.ocurridoEn(), evento.correlationId(),
                 payload));
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void clienteAnonimizado(ClienteAnonimizadoEvento evento) {
-        publicar(topicos.clienteAnonimizado(), evento.clienteId(), new EventoIntegracion<>(UUID.randomUUID(),
+        publicar(topicos.eventos(), evento.clienteId(), new EventoIntegracion<>(UUID.randomUUID(),
                 ClienteAnonimizado.TIPO, ClienteAnonimizado.VERSION, evento.ocurridoEn(), evento.correlationId(),
                 new ClienteAnonimizado(evento.clienteId())));
     }

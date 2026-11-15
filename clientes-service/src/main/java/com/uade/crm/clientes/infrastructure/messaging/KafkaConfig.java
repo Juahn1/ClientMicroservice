@@ -11,9 +11,8 @@ import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.support.serializer.JsonSerializer;
 
 /**
- * Tópicos propios del servicio (design D8 del change 03 y D5 del change 08): los que publica y el de mensajes fallidos
- * del consumidor. {@code KafkaAdmin} los crea al arrancar si no existen y, si el broker no está disponible, no impide
- * el arranque. {@code lead-calificado} no se crea: es de {@code calificacion}.
+ * Los tres tópicos del ecosistema (docs/08-contrato-tres-topicos.md del orquestador). {@code KafkaAdmin} los crea al
+ * arrancar si no existen (el orquestador también) y, si el broker no está disponible, no impide el arranque.
  */
 @Configuration
 class KafkaConfig {
@@ -30,20 +29,22 @@ class KafkaConfig {
                 .setValueSerializer(new JsonSerializer<>(objectMapper).noTypeInfo());
     }
 
+    /** Las órdenes del orquestador a todos los servicios. */
     @Bean
-    NewTopic topicoClienteActualizado(ClientesProperties properties) {
-        return topico(properties.kafka().topicos().clienteActualizado(), properties.kafka());
+    NewTopic topicoComandos(ClientesProperties properties) {
+        return topico(properties.kafka().topicos().comandos(), properties.kafka());
     }
 
+    /** Los hechos que publican los servicios: acá van {@code ClienteActualizado} y {@code ClienteAnonimizado}. */
     @Bean
-    NewTopic topicoClienteAnonimizado(ClientesProperties properties) {
-        return topico(properties.kafka().topicos().clienteAnonimizado(), properties.kafka());
+    NewTopic topicoEventos(ClientesProperties properties) {
+        return topico(properties.kafka().topicos().eventos(), properties.kafka());
     }
 
-    /** Mensajes de {@code lead-calificado} que no se pudieron registrar (design D5 del change 08). */
+    /** Los comandos que no se pudieron procesar (design D5 del change 08). */
     @Bean
-    NewTopic topicoLeadCalificadoFallidos(ClientesProperties properties) {
-        return topico(properties.kafka().topicos().leadCalificadoDlt(), properties.kafka());
+    NewTopic topicoFallidos(ClientesProperties properties) {
+        return topico(properties.kafka().topicos().dlt(), properties.kafka());
     }
 
     private static NewTopic topico(String nombre, ClientesProperties.Kafka kafka) {

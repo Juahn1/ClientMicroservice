@@ -56,10 +56,10 @@ class ContextoTest {
         assertThat(properties.situacionCrediticia().modo())
                 .isEqualTo(ClientesProperties.ModoSituacionCrediticia.SIMULADO);
         assertThat(properties.situacionCrediticia().vigencia()).isEqualTo(Duration.ofDays(30));
-        assertThat(properties.kafka().topicos().clienteActualizado()).isEqualTo("cliente-actualizado");
+        assertThat(properties.kafka().topicos().eventos()).isEqualTo("crm.eventos");
         assertThat(properties.cuil().claveCifrado()).isNotBlank();
-        assertThat(properties.kafka().topicos().leadCalificado()).isEqualTo("lead-calificado");
-        assertThat(properties.kafka().topicos().leadCalificadoDlt()).isEqualTo("lead-calificado.clientes.DLT");
+        assertThat(properties.kafka().topicos().comandos()).isEqualTo("crm.comandos");
+        assertThat(properties.kafka().topicos().dlt()).isEqualTo("crm.dlt");
         assertThat(properties.historial().zonaFecha()).isEqualTo(java.time.ZoneId.of("America/Argentina/Buenos_Aires"));
         // Perfil test: reintentos cortos (design D10 del change 08).
         assertThat(properties.historial().reintentos().intentos()).isEqualTo(3);

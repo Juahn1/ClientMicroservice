@@ -18,7 +18,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
- * Traduce un mensaje de {@code lead-calificado} a una {@link CalificacionHistorica} (design D2 y D3 del change 08).
+ * Traduce un comando {@code RegistrarCalificacion} a una {@link CalificacionHistorica} (design D2 y D3 del change 08).
  *
  * <p>Acepta el evento tal como lo publica hoy {@code calificacion} (JSON plano) y también envuelto en el sobre común de
  * integración, si lo adopta. Ignora los campos que no conoce. Cualquier incumplimiento lanza
@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class LeadCalificadoTraductor {
 
-    static final String TIPO_EVENTO = "LeadCalificado";
+    static final String TIPO_EVENTO = "RegistrarCalificacion";
     static final int LARGO_MAXIMO_TEXTO = 40;
     static final int LARGO_MAXIMO_OBSERVACION = 2000;
 
